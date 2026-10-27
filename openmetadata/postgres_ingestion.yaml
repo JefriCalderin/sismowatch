@@ -1,0 +1,46 @@
+# ==============================================================================
+# OpenMetadata Ingestion Pipeline Configuration for SismoWatch
+# Conecta a PostgreSQL para extraer esquemas Bronze, Silver, Gold, métricas de perfilado y linaje.
+# ==============================================================================
+source:
+  type: postgres
+  serviceName: sismowatch_postgres_service
+  serviceConnection:
+    config:
+      type: Postgres
+      hostPort: postgres:5432
+      username: ${DB_TRANSFORM_USER:-role_transform}
+      password: ${DB_TRANSFORM_PASSWORD:-TransformSecret2026!}
+      database: sismowatch
+      scheme: postgresql+psycopg2
+  sourceConfig:
+    config:
+      type: DatabaseMetadata
+      markDeletedTablesFromFilterOnly: true
+      includeTables: true
+      includeViews: true
+      schemaFilterPattern:
+        includes:
+          - bronze
+          - silver
+          - gold
+      tableFilterPattern:
+        includes:
+          - earthquakes_raw
+          - earthquakes_cleaned
+          - fact_earthquakes
+          - daily_metrics
+          - quality_metrics
+          - ai_reports
+          - anomaly_alerts
+
+sink:
+  type: metadata-rest
+  config: {}
+
+workflowConfig:
+  openMetadataServerConnection:
+    hostPort: ${OPENMETADATA_SERVER_URL:-http://localhost:8585/api}
+    authProvider: openmetadata
+    securityConfig:
+      jwtToken: ${OPENMETADATA_JWT_TOKEN:-""}
