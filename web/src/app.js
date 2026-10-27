@@ -763,57 +763,190 @@ async function loadReportsView() {
     const reports = await res.json();
 
     if (reports.length === 0) {
-      container.innerHTML = `<div class="p-8 text-center text-slate-500">No hay informes generados todavía. Un Administrador puede generar uno bajo demanda.</div>`;
+      container.innerHTML = `<div class="p-8 text-center text-slate-500 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">No hay informes generados todavía. Un Administrador puede generar uno bajo demanda.</div>`;
       return;
     }
 
     container.innerHTML = reports.map(rep => {
-      const findingsList = (rep.key_findings || []).map(f => `<li class="flex items-start gap-2"><span class="text-indigo-500 font-bold">•</span> <span>${f}</span></li>`).join("");
-      const metrics = rep.calculated_metrics || {};
+      let findings = rep.key_findings || [];
+      if (typeof findings === "string") {
+        try { findings = JSON.parse(findings); } catch (e) { findings = [findings]; }
+      }
+      const findingsList = findings.map((f, idx) => `
+        <li class="flex items-start gap-3 bg-slate-50 dark:bg-slate-800/80 p-3 rounded-lg border border-slate-100 dark:border-slate-800">
+          <span class="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">${idx + 1}</span>
+          <span class="text-xs md:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">${f}</span>
+        </li>
+      `).join("");
+
+      let metrics = rep.calculated_metrics || {};
+      if (typeof metrics === "string") {
+        try { metrics = JSON.parse(metrics); } catch (e) { metrics = {}; }
+      }
+
+      const notable = metrics.notable_events || [];
+      let notableHtml = "";
+      if (Array.isArray(notable) && notable.length > 0) {
+        const rows = notable.slice(0, 6).map(ev => {
+          const magVal = parseFloat(ev.magnitude || 0);
+          const magColor = magVal >= 6.0 
+            ? 'bg-red-100 dark:bg-red-950/80 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800' 
+            : (magVal >= 4.5 
+              ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800' 
+              : 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800');
+          
+          return `
+            <tr class="border-b border-slate-100 dark:border-slate-800/80 text-xs hover:bg-slate-50/70 dark:hover:bg-slate-800/50 transition">
+              <td class="py-2.5 px-3 font-mono font-bold text-indigo-600 dark:text-indigo-400">${ev.id || 'N/A'}</td>
+              <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-md font-bold text-xs ${magColor}">M ${ev.magnitude || '0.0'}</span></td>
+              <td class="py-2.5 px-3 font-medium text-slate-800 dark:text-slate-200">${ev.place || 'N/A'}</td>
+              <td class="py-2.5 px-3 text-slate-500 dark:text-slate-400">${ev.depth_km} km</td>
+              <td class="py-2.5 px-3 font-semibold ${ev.tsunami_alert ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}">${ev.tsunami_alert ? 'Sí' : 'No'}</td>
+              <td class="py-2.5 px-3">
+                ${ev.is_anomaly 
+                  ? '<span class="px-2 py-0.5 rounded text-[11px] font-bold bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800">Anomalía ML</span>' 
+                  : '<span class="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">Normal</span>'}
+              </td>
+            </tr>
+          `;
+        }).join("");
+
+        notableHtml = `
+          <div class="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
+            <div class="flex items-center justify-between mb-2">
+              <h5 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                Muestra de Eventos Relevantes del Día
+              </h5>
+              <span class="text-[11px] text-slate-400 dark:text-slate-500">Filtrados de la capa Gold</span>
+            </div>
+            <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    <th class="py-2.5 px-3">ID</th>
+                    <th class="py-2.5 px-3">Magnitud</th>
+                    <th class="py-2.5 px-3">Epicentro</th>
+                    <th class="py-2.5 px-3">Profundidad</th>
+                    <th class="py-2.5 px-3">Tsunami</th>
+                    <th class="py-2.5 px-3">Clasificación ML</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rows}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }
+
+      const statusBadge = rep.generation_status === 'SUCCESS'
+        ? `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            Verificado por IA
+          </span>`
+        : `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+            Modo de Contingencia (Fallback)
+          </span>`;
 
       return `
-        <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm hover:shadow-md transition">
-          <div class="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-slate-100 gap-2">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm hover:shadow-md transition duration-150">
+          <!-- Encabezado del Reporte -->
+          <div class="flex flex-col lg:flex-row lg:items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 gap-3">
             <div>
-              <span class="text-xs uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full ${rep.generation_status === 'SUCCESS' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">
-                ${rep.generation_status}
-              </span>
-              <h3 class="text-lg font-bold text-slate-900 mt-1">${rep.title}</h3>
-              <p class="text-xs text-slate-500">Fecha de Referencia: ${rep.report_date} | Modelo: ${rep.model_name}</p>
+              <div class="flex items-center gap-2 mb-1.5">
+                ${statusBadge}
+                <span class="text-xs text-slate-400 dark:text-slate-500">•</span>
+                <span class="text-xs text-slate-500 dark:text-slate-400 font-mono">Fecha: ${rep.report_date}</span>
+                <span class="text-xs text-slate-400 dark:text-slate-500">•</span>
+                <span class="text-xs text-slate-500 dark:text-slate-400">Modelo: ${rep.model_name}</span>
+              </div>
+              <h3 class="text-lg md:text-xl font-bold text-slate-900 dark:text-slate-100">${rep.title}</h3>
             </div>
-            <div class="flex items-center gap-2">
-              <button onclick="downloadExport('html', '${rep.report_date}')" class="px-3 py-1.5 text-xs font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg flex items-center gap-1 cursor-pointer transition">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                Descargar HTML
+            
+            <!-- Botones de Acción Ejecutiva -->
+            <div class="flex items-center flex-wrap gap-2">
+              <button onclick="viewExecutiveReport('${rep.report_date}')" class="px-3 py-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-1.5 shadow-sm transition cursor-pointer">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                Ver Informe Completo
               </button>
-              <button onclick="downloadExport('json', '${rep.report_date}')" class="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg flex items-center gap-1 cursor-pointer transition">
+              <button onclick="printExecutiveReport('${rep.report_date}')" class="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg flex items-center gap-1.5 transition cursor-pointer">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4H7v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                Imprimir / PDF
+              </button>
+              <button onclick="downloadExport('html', '${rep.report_date}')" class="px-3 py-1.5 text-xs font-semibold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 rounded-lg flex items-center gap-1.5 transition cursor-pointer">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                HTML
+              </button>
+              <button onclick="downloadExport('json', '${rep.report_date}')" class="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg flex items-center gap-1 transition cursor-pointer">
                 JSON
               </button>
             </div>
           </div>
           
-          <div class="my-4 text-slate-700 text-sm leading-relaxed bg-slate-50 p-4 rounded-lg border-l-4 border-indigo-500">
+          <!-- Resumen Ejecutivo Editorial -->
+          <div class="my-4 text-slate-700 dark:text-slate-200 text-sm leading-relaxed bg-indigo-50/60 dark:bg-indigo-950/30 p-4 rounded-xl border-l-4 border-indigo-600 dark:border-indigo-500">
+            <div class="text-[11px] font-bold uppercase tracking-wider text-indigo-800 dark:text-indigo-300 mb-1 flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+              Evaluación Ejecutiva y Situación Geológica
+            </div>
             ${rep.executive_summary}
           </div>
 
+          <!-- Matriz de Indicadores Clave (KPIs Ejecutivos) -->
+          <div class="my-4">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Indicadores Clave Verificados (Capa Gold)</h4>
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div class="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">Total Sismos</span>
+                <div class="text-xl font-black text-slate-900 dark:text-slate-100 mt-1">${metrics.total_events || 'N/A'}</div>
+                <span class="text-[10px] text-slate-400 dark:text-slate-500">Eventos del día</span>
+              </div>
+              <div class="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">Magnitud Máx</span>
+                <div class="text-xl font-black text-red-600 dark:text-red-400 mt-1">M ${metrics.max_magnitude || 'N/A'}</div>
+                <span class="text-[10px] text-slate-400 dark:text-slate-500 truncate block" title="${metrics.max_mag_location || ''}">${metrics.max_mag_location || 'Global'}</span>
+              </div>
+              <div class="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">Prof. Media</span>
+                <div class="text-xl font-black text-slate-900 dark:text-slate-100 mt-1">${metrics.avg_depth_km || 'N/A'} km</div>
+                <span class="text-[10px] text-slate-400 dark:text-slate-500">Ponderado</span>
+              </div>
+              <div class="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">Alertas Tsunami</span>
+                <div class="text-xl font-black ${metrics.tsunami_events > 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'} mt-1">${metrics.tsunami_events || 0}</div>
+                <span class="text-[10px] text-slate-400 dark:text-slate-500">Costas en alerta</span>
+              </div>
+              <div class="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">Región Foco</span>
+                <div class="text-sm font-black text-slate-900 dark:text-slate-100 mt-2 truncate" title="${metrics.top_active_region || 'N/A'}">${metrics.top_active_region || 'N/A'}</div>
+                <span class="text-[10px] text-slate-400 dark:text-slate-500">Más activa</span>
+              </div>
+              <div class="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">Anomalías ML</span>
+                <div class="text-xl font-black text-amber-600 dark:text-amber-400 mt-1">${metrics.anomalous_events || 0}</div>
+                <span class="text-[10px] text-slate-400 dark:text-slate-500">Isolation Forest</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Hallazgos Clave Verificados -->
           <div class="mt-4">
-            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Hallazgos Clave Verificados</h4>
-            <ul class="text-sm text-slate-700 space-y-1">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Hallazgos Analíticos y Conclusiones</h4>
+            <ul class="grid grid-cols-1 md:grid-cols-2 gap-2">
               ${findingsList}
             </ul>
           </div>
 
-          <div class="mt-4 pt-3 border-t border-slate-100 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-slate-600 bg-slate-50 p-3 rounded-lg">
-            <div>Total Sismos: <b>${metrics.total_events || 'N/A'}</b></div>
-            <div>Mag Máx: <b>${metrics.max_magnitude || 'N/A'}</b></div>
-            <div>Tsunamis: <b>${metrics.tsunami_events || 0}</b></div>
-            <div>Región Activa: <b>${metrics.top_active_region || 'N/A'}</b></div>
-          </div>
+          <!-- Muestra de Eventos Notables del Día -->
+          ${notableHtml}
         </div>
       `;
     }).join("");
   } catch (err) {
-    container.innerHTML = `<div class="p-8 text-center text-red-500">Error al cargar reportes: ${err.message}</div>`;
+    container.innerHTML = `<div class="p-8 text-center text-red-500 bg-white dark:bg-slate-900 border border-red-200 dark:border-red-900/50 rounded-xl">Error al cargar reportes: ${err.message}</div>`;
   }
 }
 
@@ -1037,6 +1170,31 @@ window.downloadExport = async function(format = 'csv', targetDate = null) {
     showToast(`Archivo descargado con éxito: ${filename}`, "success");
   } catch (err) {
     showToast(`Error al descargar: ${err.message}`, "error");
+  }
+};
+
+window.viewExecutiveReport = function(targetDate = null) {
+  const token = state.token;
+  if (!token) {
+    showToast("Debe iniciar sesión para ver el informe ejecutivo.", "warning");
+    return;
+  }
+  let url = `${API_BASE}/api/reports/export?format=html&download=false&token=${encodeURIComponent(token)}`;
+  if (targetDate) url += `&target_date=${encodeURIComponent(targetDate)}`;
+  window.open(url, "_blank");
+};
+
+window.printExecutiveReport = function(targetDate = null) {
+  const token = state.token;
+  if (!token) {
+    showToast("Debe iniciar sesión para imprimir el informe ejecutivo.", "warning");
+    return;
+  }
+  let url = `${API_BASE}/api/reports/export?format=html&download=false&token=${encodeURIComponent(token)}`;
+  if (targetDate) url += `&target_date=${encodeURIComponent(targetDate)}`;
+  const win = window.open(url, "_blank");
+  if (win) {
+    win.focus();
   }
 };
 

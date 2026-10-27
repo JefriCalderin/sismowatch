@@ -563,22 +563,34 @@
 
     <!-- SECCIÓN 2: INFORMES DE IA -->
     <section id="tab-section-reports" class="hidden space-y-6">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-2xs">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
         <div>
-          <h2 class="text-xl font-bold text-slate-900">Informes Ejecutivos Diarios con IA</h2>
-          <p class="text-xs text-slate-500 mt-1">Generados automáticamente por Apache Airflow con auditoría de tokens, latencia y verificación matemática estricta</p>
+          <div class="flex items-center gap-2 mb-1">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+              Certificación Ejecutiva Capa Gold
+            </span>
+            <span class="text-xs text-slate-400 dark:text-slate-500">•</span>
+            <span class="text-xs text-slate-500 dark:text-slate-400 font-medium">Formato Imprimible & PDF</span>
+          </div>
+          <h2 class="text-xl font-bold text-slate-900 dark:text-slate-100">Informes Ejecutivos Diarios con IA</h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Generados por el orquestador con verificación matemática contra PostgreSQL Gold y almacenamiento en el Data Lake MinIO S3</p>
         </div>
-        <div class="flex items-center gap-2">
-          <button onclick="loadReportsView()" class="px-3 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg cursor-pointer">
+        <div class="flex items-center flex-wrap gap-2">
+          <button onclick="loadReportsView()" class="px-3 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg cursor-pointer transition flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
             Refrescar
           </button>
-          <button onclick="downloadExport('html')" class="px-3 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg cursor-pointer flex items-center gap-1">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-            Descargar Último Reporte (HTML)
+          <button onclick="viewExecutiveReport()" class="px-3.5 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg cursor-pointer shadow-sm flex items-center gap-1.5 transition">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+            Ver Último Informe Ejecutivo
+          </button>
+          <button onclick="downloadExport('html')" class="px-3 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg cursor-pointer flex items-center gap-1.5 transition">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            Descargar HTML
           </button>
         </div>
       </div>
-      <div id="reports-container" class="space-y-4">
+      <div id="reports-container" class="space-y-6">
         <!-- Renderizado dinámicamente -->
       </div>
     </section>
