@@ -45,7 +45,7 @@ class ApiSettings:
     AI_PROVIDER: str = os.getenv("AI_PROVIDER", "gemini")
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-    AI_MODEL_NAME: str = os.getenv("AI_MODEL_NAME", "gemini-1.5-flash")
+    AI_MODEL_NAME: str = os.getenv("AI_MODEL_NAME", "gemini-2.0-flash-lite")
 
     @property
     def db_uri(self) -> str:

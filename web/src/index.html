@@ -42,8 +42,8 @@
       <!-- Estado en Vivo y Usuario -->
       <div class="flex items-center gap-3 sm:gap-4">
         <!-- Selector Modo Oscuro -->
-        <button id="theme-toggle-btn" onclick="toggleDarkMode()" class="p-1.5 sm:p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer flex items-center justify-center border border-slate-200" title="Alternar modo oscuro / claro">
-          <span id="theme-icon" class="text-sm">🌙</span>
+        <button id="theme-toggle-btn" onclick="toggleDarkMode()" class="p-1.5 sm:p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition cursor-pointer flex items-center justify-center border border-slate-200 dark:border-slate-700" title="Alternar modo oscuro / claro">
+          <span id="theme-icon" class="flex items-center justify-center"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg></span>
         </button>
 
         <div class="hidden sm:flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-full border border-slate-200">
@@ -68,7 +68,8 @@
         Dashboard Principal
       </button>
       <button id="nav-btn-chat" onclick="switchTab('chat')" class="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 flex items-center gap-1.5">
-        <span>🤖</span> Chat con IA (Gold)
+        <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+        Chat con IA (Gold)
       </button>
       <button id="nav-btn-reports" onclick="switchTab('reports')" class="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900">
         Informes de IA
@@ -77,7 +78,8 @@
         Pipeline & Calidad
       </button>
       <a href="http://localhost:9001" target="_blank" class="px-3 py-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300 hover:text-amber-800 dark:hover:text-amber-200 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800/60 rounded-xl flex items-center gap-1.5 ml-auto transition shadow-2xs">
-        <span>🪣</span> MinIO Data Lake (Puerto 9001)
+        <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg>
+        MinIO Data Lake (Puerto 9001)
       </a>
     </div>
   </header>
@@ -96,7 +98,7 @@
       <!-- Barra de Acciones de Administrador -->
       <div class="admin-only hidden bg-gradient-to-r from-indigo-900 to-slate-900 text-white rounded-xl p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
         <div class="flex items-center gap-2">
-          <span class="p-2 bg-indigo-800 rounded-lg text-lg">⚡</span>
+          <span class="p-2 bg-indigo-800 rounded-lg text-indigo-300 flex items-center justify-center"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg></span>
           <div>
             <h4 class="text-sm font-bold">Panel de Control de Administrador</h4>
             <p class="text-xs text-indigo-200">Acciones privilegiadas protegidas por RBAC</p>
@@ -207,7 +209,7 @@
             </tbody>
           </table>
           <div id="today-events-empty" class="hidden text-center py-8 text-slate-500 text-sm">
-            <span class="text-xl block mb-1">✅</span>
+            <span class="block mb-1 text-emerald-500"><svg class="w-6 h-6 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></span>
             <p class="font-bold text-slate-700">Sin eventos anómalos o de alta magnitud en las últimas horas</p>
             <p class="text-xs text-slate-400">Todos los parámetros se mantienen estables en la capa Gold.</p>
           </div>
@@ -246,7 +248,7 @@
       <!-- SEPARADOR VISUAL: HISTORIAL Y DÍAS ANTERIORES -->
       <div class="pt-6 pb-2 border-t-2 border-dashed border-slate-300">
         <div class="flex items-center gap-2.5">
-          <span class="p-2 bg-indigo-50 text-indigo-700 rounded-xl text-lg font-bold border border-indigo-100">📅</span>
+          <span class="p-2 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 rounded-xl border border-indigo-100 dark:border-indigo-800/60 flex items-center justify-center"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg></span>
           <div>
             <h2 class="text-lg font-black text-slate-900">Historial y Consultas de Días Anteriores</h2>
             <p class="text-xs text-slate-500">Consulta retrospectiva seleccionando un día específico, rango personalizado, mes, año o los últimos N días sin alterar el monitoreo de hoy.</p>
@@ -261,7 +263,7 @@
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div class="flex items-center gap-2">
-                <span class="p-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-sm">🌐</span>
+                <span class="p-1.5 bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 rounded-lg border border-indigo-200 dark:border-indigo-800/60 flex items-center justify-center"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></span>
                 <h3 class="text-base font-bold text-slate-900">Filtros de Búsqueda Histórica</h3>
               </div>
               <p class="text-xs text-slate-500 mt-0.5">Consultas manuales dinámicas a la API oficial del USGS (<code class="text-[11px] bg-slate-100 px-1 py-0.5 rounded text-indigo-600 font-mono">fdsnws/event/1/query</code>) o al Catálogo Gold.</p>
@@ -269,11 +271,13 @@
             
             <!-- Selector de Modo de Consulta -->
             <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-semibold">
-              <button type="button" id="btn-mode-usgs" onclick="setQueryMode('usgs')" class="px-3 py-1.5 rounded-lg bg-white text-indigo-700 shadow-2xs font-bold transition cursor-pointer">
-                🌐 USGS Oficial (En Vivo)
+              <button type="button" id="btn-mode-usgs" onclick="setQueryMode('usgs')" class="px-3 py-1.5 rounded-lg bg-white text-indigo-700 shadow-2xs font-bold transition cursor-pointer flex items-center gap-1">
+                <svg class="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                USGS Oficial (En Vivo)
               </button>
-              <button type="button" id="btn-mode-gold" onclick="setQueryMode('gold')" class="px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition cursor-pointer">
-                🏛️ Capa Gold (Local)
+              <button type="button" id="btn-mode-gold" onclick="setQueryMode('gold')" class="px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition cursor-pointer flex items-center gap-1">
+                <svg class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg>
+                Capa Gold (Local)
               </button>
             </div>
           </div>
@@ -425,12 +429,12 @@
             </tbody>
           </table>
           <div id="events-empty" class="hidden text-center py-12 text-slate-500 text-sm">
-            <span class="text-2xl block mb-2">🔍</span>
+            <span class="block mb-2 text-slate-400"><svg class="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg></span>
             <p class="font-bold text-slate-700">No se encontraron eventos sísmicos</p>
             <p class="text-xs text-slate-400 mt-1">Prueba reduciendo la magnitud mínima o ampliando el período consultado.</p>
           </div>
           <div id="events-error" class="hidden text-center py-12 text-red-600 text-sm bg-red-50/50">
-            <span class="text-2xl block mb-2">⚠️</span>
+            <span class="block mb-2 text-amber-500"><svg class="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg></span>
             <p id="events-error-message" class="font-bold">Error al consultar el catálogo sísmico</p>
             <button onclick="loadEventsTable()" class="mt-3 px-4 py-1.5 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700 cursor-pointer">Reintentar</button>
           </div>
@@ -456,7 +460,7 @@
       <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div class="flex items-center gap-2">
-            <span class="p-2 bg-indigo-100 text-indigo-700 rounded-lg text-lg">🤖</span>
+            <span class="p-2 bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 rounded-lg border border-indigo-200 dark:border-indigo-800/60 flex items-center justify-center"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></span>
             <div>
               <h2 class="text-xl font-bold text-slate-900">Asistente Inteligente SismoWatch</h2>
               <p class="text-xs text-slate-500">Consulta datos analíticos, magnitudes, anomalías y recomendaciones en lenguaje natural conectada a la Capa Gold.</p>
@@ -466,47 +470,53 @@
         <div class="flex flex-wrap items-center gap-2 text-xs">
           <!-- Selector Modo Texto / Voz -->
           <div class="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-            <button type="button" id="chat-mode-text" onclick="setChatInputMode('text')" class="px-2.5 py-1 rounded-md bg-white text-indigo-700 font-bold shadow-2xs transition cursor-pointer">
-              💬 Texto
+            <button type="button" id="chat-mode-text" onclick="setChatInputMode('text')" class="px-2.5 py-1 rounded-md bg-white text-indigo-700 font-bold shadow-2xs transition cursor-pointer flex items-center gap-1">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+              Texto
             </button>
-            <button type="button" id="chat-mode-voice" onclick="setChatInputMode('voice')" class="px-2.5 py-1 rounded-md text-slate-600 hover:text-slate-900 font-semibold transition cursor-pointer">
-              🎙️ Voz
+            <button type="button" id="chat-mode-voice" onclick="setChatInputMode('voice')" class="px-2.5 py-1 rounded-md text-slate-600 hover:text-slate-900 font-semibold transition cursor-pointer flex items-center gap-1">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+              Voz
             </button>
           </div>
           <!-- Toggle para lectura por voz de respuestas (Text-to-Speech) -->
           <button type="button" id="btn-toggle-tts" onclick="toggleTextToSpeech()" title="Activar/desactivar lectura por voz de respuestas" class="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg border border-slate-200 dark:border-slate-700 font-medium flex items-center gap-1 cursor-pointer transition">
-            <span id="tts-icon">🔊</span> <span id="tts-label" class="hidden sm:inline">Voz: Activada</span>
+            <span id="tts-icon"><svg class="w-4 h-4 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg></span> <span id="tts-label" class="hidden sm:inline">Voz: Activada</span>
           </button>
           <span class="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 rounded-full font-bold flex items-center gap-1.5 text-xs">
             <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             Capa Gold Activa
           </span>
-          <span class="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 rounded-full font-semibold text-xs">
-            PostgreSQL + MinIO S3
-          </span>
+          
         </div>
       </div>
 
       <!-- Sugerencias de Preguntas Rápidas -->
       <div class="flex flex-wrap gap-2 items-center">
         <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Preguntas rápidas:</span>
-        <button onclick="sendQuickChatMessage('¿Cuál fue el último sismo que ocurrió en los últimos 5 minutos?')" class="px-3 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-700 dark:hover:text-indigo-300 text-slate-700 dark:text-slate-300 text-xs rounded-full border border-slate-200 dark:border-slate-700 transition cursor-pointer">
-          🕒 Último sismo reciente
+        <button onclick="sendQuickChatMessage('¿Cuál fue el último sismo que ocurrió en los últimos 5 minutos?')" class="px-3 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-700 dark:hover:text-indigo-300 text-slate-700 dark:text-slate-300 text-xs rounded-full border border-slate-200 dark:border-slate-700 transition cursor-pointer flex items-center gap-1">
+          <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          Último sismo reciente
         </button>
-        <button onclick="sendQuickChatMessage('¿Cuál fue el sismo de mayor magnitud registrado hoy y en qué región?')" class="px-3 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-700 dark:hover:text-indigo-300 text-slate-700 dark:text-slate-300 text-xs rounded-full border border-slate-200 dark:border-slate-700 transition cursor-pointer">
-          ⚡ Sismo de mayor magnitud
+        <button onclick="sendQuickChatMessage('¿Cuál fue el sismo de mayor magnitud registrado hoy y en qué región?')" class="px-3 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-700 dark:hover:text-indigo-300 text-slate-700 dark:text-slate-300 text-xs rounded-full border border-slate-200 dark:border-slate-700 transition cursor-pointer flex items-center gap-1">
+          <svg class="w-3.5 h-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          Sismo de mayor magnitud
         </button>
-        <button onclick="sendQuickChatMessage('¿Se han detectado anomalías o enjambres sísmicos con Isolation Forest?')" class="px-3 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-700 dark:hover:text-indigo-300 text-slate-700 dark:text-slate-300 text-xs rounded-full border border-slate-200 dark:border-slate-700 transition cursor-pointer">
-          🚨 Anomalías y Enjambres
+        <button onclick="sendQuickChatMessage('¿Se han detectado anomalías o enjambres sísmicos con Isolation Forest?')" class="px-3 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-700 dark:hover:text-indigo-300 text-slate-700 dark:text-slate-300 text-xs rounded-full border border-slate-200 dark:border-slate-700 transition cursor-pointer flex items-center gap-1">
+          <svg class="w-3.5 h-3.5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+          Anomalías y Enjambres
         </button>
-        <button onclick="sendQuickChatMessage('Dame un resumen de los hallazgos clave del último informe ejecutivo')" class="px-3 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-700 dark:hover:text-indigo-300 text-slate-700 dark:text-slate-300 text-xs rounded-full border border-slate-200 dark:border-slate-700 transition cursor-pointer">
-          📋 Resumen Informe Ejecutivo
+        <button onclick="sendQuickChatMessage('Dame un resumen de los hallazgos clave del último informe ejecutivo')" class="px-3 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-700 dark:hover:text-indigo-300 text-slate-700 dark:text-slate-300 text-xs rounded-full border border-slate-200 dark:border-slate-700 transition cursor-pointer flex items-center gap-1">
+          <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          Resumen Informe Ejecutivo
         </button>
-        <button onclick="sendQuickChatMessage('¿Cuál es el estado de la compuerta de calidad de Pandera y cuántos registros pasaron?')" class="px-3 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-700 dark:hover:text-indigo-300 text-slate-700 dark:text-slate-300 text-xs rounded-full border border-slate-200 dark:border-slate-700 transition cursor-pointer">
-          🛡️ Calidad de Datos Pandera
+        <button onclick="sendQuickChatMessage('¿Cuál es el estado de la compuerta de calidad de Pandera y cuántos registros pasaron?')" class="px-3 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-700 dark:hover:text-indigo-300 text-slate-700 dark:text-slate-300 text-xs rounded-full border border-slate-200 dark:border-slate-700 transition cursor-pointer flex items-center gap-1">
+          <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+          Calidad de Datos Pandera
         </button>
-        <button onclick="sendQuickChatMessage('¿Qué recomendaciones oficiales de prevención y seguridad aplican ante un sismo?')" class="px-3 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-700 dark:hover:text-indigo-300 text-slate-700 dark:text-slate-300 text-xs rounded-full border border-slate-200 dark:border-slate-700 transition cursor-pointer">
-          ⚠️ Medidas de Prevención
+        <button onclick="sendQuickChatMessage('¿Qué recomendaciones oficiales de prevención y seguridad aplican ante un sismo?')" class="px-3 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-700 dark:hover:text-indigo-300 text-slate-700 dark:text-slate-300 text-xs rounded-full border border-slate-200 dark:border-slate-700 transition cursor-pointer flex items-center gap-1">
+          <svg class="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+          Medidas de Prevención
         </button>
       </div>
 
@@ -518,7 +528,7 @@
           <div class="flex items-start gap-3">
             <div class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0">IA</div>
             <div class="bg-slate-50 border border-slate-200 rounded-2xl rounded-tl-none p-4 max-w-2xl text-sm text-slate-800 leading-relaxed shadow-2xs">
-              <p class="font-bold text-indigo-950 mb-1">¡Hola! Soy tu Asistente Sismológico de SismoWatch 🌍</p>
+              <p class="font-bold text-indigo-950 mb-1">¡Hola! Soy tu Asistente Sismológico de SismoWatch</p>
               <p>Tengo acceso directo a los datos en tiempo real de la <b>capa Gold</b> de nuestro Data Lakehouse (PostgreSQL + MinIO S3). Puedes hacerme preguntas sobre los eventos sísmicos registrados, niveles de alerta, anomalías detectadas por Machine Learning o las conclusiones de los informes ejecutivos diarios.</p>
             </div>
           </div>

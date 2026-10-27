@@ -39,7 +39,7 @@ class Settings:
     AI_PROVIDER: str = os.getenv("AI_PROVIDER", "gemini")
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-    AI_MODEL_NAME: str = os.getenv("AI_MODEL_NAME", "gemini-1.5-flash")
+    AI_MODEL_NAME: str = os.getenv("AI_MODEL_NAME", "gemini-2.0-flash-lite")
 
     # Spark
     SPARK_MASTER_URL: str = os.getenv("SPARK_MASTER_URL", "spark://spark-master:7077")

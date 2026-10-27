@@ -26,7 +26,9 @@ Eres el Asistente Sismológico Oficial de SismoWatch, especializado en monitoreo
 PRINCIPIOS OBLIGATORIOS DE COMPORTAMIENTO:
 1. PUNTUALIDAD Y CONCISIÓN EXTREMA: Responde ÚNICAMENTE lo que el usuario esté preguntando. NO agregues estadísticas no solicitadas, ni tablas de datos que no se te hayan pedido, ni introducciones redundantes. Sé breve, claro y ve directo al grano.
 2. FIDELIDAD TOTAL (CERO ALUCINACIÓN): Basa cualquier dato numérico (magnitud, conteo de sismos, profundidad, región, alertas de tsunami) ESTRICTAMENTE en los datos de la capa Gold provistos. No inventes magnitudes ni lugares. Si el usuario pregunta por un dato que no está en el contexto, indica con honestidad que no se tiene registro.
-3. TONO Y FORMATO: Responde en español neutro, cortés y profesional. Utiliza negritas para resaltar datos clave y listas solo cuando el usuario solicite múltiples elementos.
+3. TONO Y FORMATO: Responde en español neutro, cortés y profesional. Utiliza negritas para resaltar datos clave y listas solo cuando el usuario solicite múltiples elementos. NO utilices emojis en tus respuestas.
+4. DELIMITACIÓN ESTRICTA DEL TEMA (GUARDRAILS TEMÁTICOS): Eres un asistente sismológico especializado y EXCLUSIVO de SismoWatch. Si el usuario realiza una pregunta ajena, externa o fuera del ámbito sismológico y del sistema (por ejemplo: cocina, recetas, deportes, fútbol, programación externa, política, chistes, tareas escolares, finanzas, criptomonedas, poesía, etc.), debes rechazar amablemente la consulta respondiendo exactamente:
+"Como asistente especializado de SismoWatch, únicamente puedo responder preguntas relacionadas con el monitoreo de eventos sísmicos, alertas de tsunami, análisis de datos de la capa Gold o reportes del sistema. No puedo responder consultas sobre temas externos o ajenos a este ámbito."
 """
 
 FEW_SHOT_EXAMPLES = """
@@ -62,6 +64,14 @@ Asistente: Durante un sismo sigue estas 3 pautas prioritarias:
 [Ejemplo 7 - Último sismo reciente / últimos minutos]
 Usuario: cual fue el ultimo sismo que ocurrio en los ultimos 5 minutos?
 Asistente: El sismo más reciente registrado en la capa Gold es de **M 0.70**, ocurrido en **85 km NW of Karluk, Alaska** (Alaska) a una profundidad de **10.0 km** (2026-10-27 15:49:03 UTC). Alerta de tsunami: No.
+
+[Ejemplo 8 - Pregunta ajena al tema (Cocina, recetas, etc.)]
+Usuario: como se prepara una pizza napolitana?
+Asistente: Como asistente especializado de SismoWatch, únicamente puedo responder preguntas relacionadas con el monitoreo de eventos sísmicos, alertas de tsunami, análisis de datos de la capa Gold o reportes del sistema. No puedo responder consultas sobre temas externos o ajenos a este ámbito.
+
+[Ejemplo 9 - Pregunta ajena sobre fútbol o deportes]
+Usuario: quien gano la final del partido?
+Asistente: Como asistente especializado de SismoWatch, únicamente puedo responder preguntas relacionadas con el monitoreo de eventos sísmicos, alertas de tsunami, análisis de datos de la capa Gold o reportes del sistema. No puedo responder consultas sobre temas externos o ajenos a este ámbito.
 """
 
 class ChatMessage(BaseModel):
@@ -221,12 +231,31 @@ def generate_offline_intelligent_response(question: str, ctx: Dict[str, Any]) ->
     avg_mag_today = today_stats.get("avg_mag_today", 0.0)
     tsunami_today = today_stats.get("tsunami_today", 0)
 
-    # 1. Saludo puntual (Sin datos de más)
+    # 1. Saludo puntual (Sin emojis ni datos de más)
     if any(k in q for k in ["hola", "como estas", "cómo estás", "buenos dias", "buenas tardes", "buenas noches", "saludos", "que tal", "quien eres"]):
         return (
-            "¡Hola! 👋 Estoy muy bien, gracias por preguntar.\n\n"
+            "¡Hola! Estoy muy bien, gracias por preguntar.\n\n"
             "Soy tu **Asistente Sismológico de SismoWatch**, conectado directamente a la **Capa Gold**. "
             "¿En qué puedo orientarte hoy sobre la actividad sísmica o los reportes analíticos?"
+        )
+
+    # 1.1. Verificación de Guardrails Temáticos (Rechazo de consultas externas / ajenas al tema)
+    SEISMIC_DOMAIN_KEYWORDS = [
+        "sismo", "sismos", "terremoto", "terremotos", "temblor", "temblores", "tsunami", "tsunamis",
+        "epicentro", "magnitud", "richter", "falla", "placa", "tecton", "profundidad", "sacudida",
+        "movimiento", "enjambre", "anomal", "alerta", "evento", "eventos", "reporte", "informe",
+        "ejecutivo", "gold", "silver", "bronze", "lakehouse", "minio", "pandera", "calidad",
+        "kpi", "hoy", "ayer", "reciente", "ultimo", "fuerte", "mayor", "maximo", "promedio",
+        "seguridad", "prevenci", "evacua", "que hacer", "medallon", "spark", "airflow",
+        "indonesia", "alaska", "california", "nevada", "texas", "hawaii", "colombia", "chile",
+        "mexico", "japon", "peru", "minutos", "horas", "catálogo", "catalogo", "datos", "sistema"
+    ]
+    if not any(k in q for k in SEISMIC_DOMAIN_KEYWORDS):
+        return (
+            "Como asistente especializado de SismoWatch, únicamente puedo responder preguntas "
+            "relacionadas con el monitoreo de eventos sísmicos, alertas de tsunami, análisis de datos "
+            "de la capa Gold o reportes del sistema. No puedo responder consultas sobre temas externos "
+            "o ajenos a este ámbito."
         )
 
     # 2. Conteo de sismos de hoy puntual
@@ -239,11 +268,11 @@ def generate_offline_intelligent_response(question: str, ctx: Dict[str, Any]) ->
             f"con una magnitud máxima de **{max_active:.1f}** y un promedio de **{avg_active:.2f}**."
         )
 
-    # 3. Alertas de tsunami puntuales
+    # 3. Alertas de tsunami puntuales (Sin emojis)
     if any(k in q for k in ["tsunami", "alerta marina", "maremoto"]):
         active_tsunami = tsunami_today if events_today > 0 else tsunami_24h
         if active_tsunami > 0:
-            return f"⚠️ **Atención:** Se registran **{active_tsunami} alerta(s) de tsunami** asociadas a eventos recientes en la capa Gold."
+            return f"**Atención:** Se registran **{active_tsunami} alerta(s) de tsunami** asociadas a eventos recientes en la capa Gold."
         return "Actualmente **no hay alertas de tsunami activas** en los registros de la capa Gold."
 
     # 3.5. Último sismo registrado / Más reciente / Últimos minutos
@@ -283,11 +312,11 @@ def generate_offline_intelligent_response(question: str, ctx: Dict[str, Any]) ->
             else:
                 return f"No se registran eventos sísmicos recientes en la región de **{reg.capitalize()}** en la ventana de monitoreo actual de la capa Gold."
 
-    # 5. Anomalías y Enjambres con ML
+    # 5. Anomalías y Enjambres con ML (Sin emojis)
     if any(k in q for k in ["anomal", "enjambre", "alerta", "atipico", "atípico", "isolation"]):
         if anomalies:
             top_a = anomalies[0]
-            return f"🚨 **Alerta ML ({top_a.get('severity', 'ALERTA')}):** {top_a.get('explanation')}"
+            return f"**Alerta ML ({top_a.get('severity', 'ALERTA')}):** {top_a.get('explanation')}"
         return f"El modelo *Isolation Forest* reporta **{anom_24h} anomalías críticas**. Todos los eventos se encuentran en rangos de profundidad y frecuencia normales."
 
     # 6. Reporte ejecutivo de IA
@@ -342,8 +371,16 @@ def query_llm_with_context(question: str, history: List[ChatMessage], ctx: Dict[
     try:
         import google.generativeai as genai
         genai.configure(api_key=api_key)
-        
-        model_name = api_settings.AI_MODEL_NAME or "gemini-3.8-flash"
+
+        raw_model = api_settings.AI_MODEL_NAME or "gemini-2.0-flash-lite"
+        # Mapeo flexible de modelos optimizados lite
+        if "lite" in raw_model.lower():
+            model_name = "gemini-2.0-flash-lite"
+        elif "flash" in raw_model.lower():
+            model_name = "gemini-1.5-flash"
+        else:
+            model_name = raw_model
+
         if not model_name.startswith("models/"):
             model_name = f"models/{model_name}"
 

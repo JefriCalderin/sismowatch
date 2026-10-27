@@ -57,6 +57,9 @@ services:
           --role Admin \
           --email ${AIRFLOW_ADMIN_EMAIL:-admin@sismowatch.internal} \
           --password ${AIRFLOW_ADMIN_PASSWORD:-SismoAdmin2026!} || true
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     networks:
       - sismowatch-net
 
@@ -92,12 +95,15 @@ services:
       USGS_QUERY_URL: ${USGS_QUERY_URL:-https://earthquake.usgs.gov/fdsnws/event/1/query}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      AI_MODEL_NAME: ${AI_MODEL_NAME:-gemini-1.5-flash}
+      AI_MODEL_NAME: ${AI_MODEL_NAME:-gemini-2.0-flash-lite}
       SPARK_MASTER_URL: spark://spark-master:7077
       MINIO_ENDPOINT: minio:9000
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-MinioAdminSismo2026!}
       MINIO_SECURE: "false"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     ports:
       - "8080:8080"
     volumes:
@@ -144,12 +150,15 @@ services:
       USGS_QUERY_URL: ${USGS_QUERY_URL:-https://earthquake.usgs.gov/fdsnws/event/1/query}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      AI_MODEL_NAME: ${AI_MODEL_NAME:-gemini-1.5-flash}
+      AI_MODEL_NAME: ${AI_MODEL_NAME:-gemini-2.0-flash-lite}
       SPARK_MASTER_URL: spark://spark-master:7077
       MINIO_ENDPOINT: minio:9000
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-MinioAdminSismo2026!}
       MINIO_SECURE: "false"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/include:/opt/airflow/include
@@ -224,7 +233,10 @@ services:
       MINIO_SECURE: "false"
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      AI_MODEL_NAME: ${AI_MODEL_NAME:-gemini-3.8-flash}
+      AI_MODEL_NAME: ${AI_MODEL_NAME:-gemini-2.0-flash-lite}
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     volumes:
       - ./api/app:/app/api/app
     ports:

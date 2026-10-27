@@ -136,84 +136,141 @@ async def query_usgs_historical(
         "limit": 20000
     }
 
-    # 3. Invocar API de USGS de forma asíncrona y con timeout seguro
-    try:
-        async with httpx.AsyncClient(timeout=35.0) as client:
-            resp = await client.get(usgs_url, params=usgs_params)
-            if resp.status_code != 200:
-                raise HTTPException(
-                    status_code=resp.status_code,
-                    detail=f"Error retornado por la API del USGS ({resp.status_code}): {resp.text[:200]}"
-                )
-            data = resp.json()
-    except httpx.TimeoutException:
-        raise HTTPException(
-            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail="Tiempo de espera agotado al consultar la API del USGS. Intente reducir el rango de fechas."
-        )
-    except httpx.RequestError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Error de conexión con los servidores del USGS: {str(exc)}"
-        )
+    # 3. Invocar API de USGS de forma asíncrona con reintentos y fallback resiliente a Gold
+    data = None
+    network_error_msg = None
+    source_label = "USGS Official Earthquake Catalog (fdsnws/event/1/query)"
 
-    # 4. Procesar y sanitizar resultados
-    features = data.get("features", [])
+    for attempt in range(2):
+        try:
+            async with httpx.AsyncClient(timeout=25.0) as client:
+                resp = await client.get(usgs_url, params=usgs_params)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    break
+                elif resp.status_code != 200:
+                    network_error_msg = f"Error retornado por la API del USGS ({resp.status_code}): {resp.text[:200]}"
+                    break
+        except (httpx.RequestError, httpx.TimeoutException) as exc:
+            network_error_msg = str(exc)
+            if attempt == 0:
+                import asyncio
+                await asyncio.sleep(0.5)
+
     parsed_events = []
     map_markers = []
 
-    for f in features:
-        props = f.get("properties") or {}
-        geom = f.get("geometry") or {}
-        coords = geom.get("coordinates") or [0.0, 0.0, 0.0]
+    if not data or "features" not in data:
+        # Fallback resiliente: consultar catálogo Gold local
+        source_label = "Catálogo Histórico Gold (Respaldo Local por Indisponibilidad de Red USGS)"
+        db_sql = """
+            SELECT id, magnitude, place, region, event_time, updated_at,
+                   longitude, latitude, depth_km, tsunami_alert, significance,
+                   magnitude_category, depth_category, is_anomaly, anomaly_score,
+                   anomaly_reason, url
+            FROM gold.fact_earthquakes
+            WHERE event_time >= :st AND event_time <= :et AND magnitude >= :mm
+            ORDER BY event_time DESC
+            LIMIT 5000;
+        """
+        db_rows = query_db(db_sql, {"st": starttime, "et": endtime, "mm": min_magnitude}) or []
 
-        t_ms = props.get("time") or 0
-        u_ms = props.get("updated") or t_ms
-        event_time = datetime.fromtimestamp(t_ms / 1000.0, tz=timezone.utc)
-        updated_time = datetime.fromtimestamp(u_ms / 1000.0, tz=timezone.utc)
+        if db_rows:
+            for r in db_rows:
+                ev_time = r["event_time"].isoformat() if hasattr(r["event_time"], "isoformat") else str(r["event_time"])
+                up_time = r["updated_at"].isoformat() if hasattr(r.get("updated_at"), "isoformat") else ev_time
+                ev_dict = {
+                    "id": str(r["id"]),
+                    "magnitude": float(r["magnitude"]),
+                    "place": str(r["place"]),
+                    "region": str(r["region"] or "Global"),
+                    "event_time": ev_time,
+                    "updated_time": up_time,
+                    "longitude": float(r.get("longitude") or 0.0),
+                    "latitude": float(r.get("latitude") or 0.0),
+                    "depth_km": float(r.get("depth_km") or 0.0),
+                    "tsunami_alert": bool(r.get("tsunami_alert", False)),
+                    "significance": int(r.get("significance") or 0),
+                    "magnitude_category": str(r.get("magnitude_category") or "Desconocido"),
+                    "depth_category": str(r.get("depth_category") or "Desconocido"),
+                    "is_anomaly": bool(r.get("is_anomaly", False)),
+                    "anomaly_score": float(r.get("anomaly_score") or 0.0),
+                    "anomaly_reason": r.get("anomaly_reason"),
+                    "url": r.get("url") or f"https://earthquake.usgs.gov/earthquakes/eventpage/{r['id']}"
+                }
+                parsed_events.append(ev_dict)
+                if len(map_markers) < 1000:
+                    map_markers.append({
+                        "id": str(r["id"]),
+                        "magnitude": float(r["magnitude"]),
+                        "place": str(r["place"]),
+                        "region": str(r["region"] or "Global"),
+                        "latitude": float(r.get("latitude") or 0.0),
+                        "longitude": float(r.get("longitude") or 0.0),
+                        "depth_km": float(r.get("depth_km") or 0.0),
+                        "time": ev_time,
+                        "url": ev_dict["url"]
+                    })
+        elif network_error_msg:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Error de conexión con los servidores del USGS: {network_error_msg}"
+            )
+    else:
+        # 4. Procesar y sanitizar resultados de USGS
+        features = data.get("features", [])
+        for f in features:
+            props = f.get("properties") or {}
+            geom = f.get("geometry") or {}
+            coords = geom.get("coordinates") or [0.0, 0.0, 0.0]
 
-        mag = float(props.get("mag") or 0.0)
-        lon = float(coords[0]) if len(coords) > 0 else 0.0
-        lat = float(coords[1]) if len(coords) > 1 else 0.0
-        depth = float(coords[2]) if len(coords) > 2 else 0.0
+            t_ms = props.get("time") or 0
+            u_ms = props.get("updated") or t_ms
+            event_time = datetime.fromtimestamp(t_ms / 1000.0, tz=timezone.utc)
+            updated_time = datetime.fromtimestamp(u_ms / 1000.0, tz=timezone.utc)
 
-        place_clean = sanitize_text(props.get("place"))
-        region = extract_region(place_clean)
-        event_id = f.get("id") or f"usgs_{t_ms}"
+            mag = float(props.get("mag") or 0.0)
+            lon = float(coords[0]) if len(coords) > 0 else 0.0
+            lat = float(coords[1]) if len(coords) > 1 else 0.0
+            depth = float(coords[2]) if len(coords) > 2 else 0.0
 
-        event_dict = {
-            "id": event_id,
-            "magnitude": round(mag, 2),
-            "place": place_clean,
-            "region": region,
-            "event_time": event_time.isoformat(),
-            "updated_time": updated_time.isoformat(),
-            "longitude": round(lon, 4),
-            "latitude": round(lat, 4),
-            "depth_km": round(depth, 2),
-            "tsunami_alert": bool(props.get("tsunami", 0)),
-            "significance": int(props.get("sig") or 0),
-            "magnitude_category": categorize_magnitude(mag),
-            "depth_category": categorize_depth(depth),
-            "is_anomaly": False,
-            "anomaly_score": 0.0,
-            "anomaly_reason": None,
-            "url": props.get("url") or f"https://earthquake.usgs.gov/earthquakes/eventpage/{event_id}"
-        }
-        parsed_events.append(event_dict)
+            place_clean = sanitize_text(props.get("place"))
+            region = extract_region(place_clean)
+            event_id = f.get("id") or f"usgs_{t_ms}"
 
-        if len(map_markers) < 1000:
-            map_markers.append({
+            event_dict = {
                 "id": event_id,
                 "magnitude": round(mag, 2),
                 "place": place_clean,
                 "region": region,
-                "latitude": round(lat, 4),
+                "event_time": event_time.isoformat(),
+                "updated_time": updated_time.isoformat(),
                 "longitude": round(lon, 4),
+                "latitude": round(lat, 4),
                 "depth_km": round(depth, 2),
-                "time": event_time.isoformat(),
-                "url": event_dict["url"]
-            })
+                "tsunami_alert": bool(props.get("tsunami", 0)),
+                "significance": int(props.get("sig") or 0),
+                "magnitude_category": categorize_magnitude(mag),
+                "depth_category": categorize_depth(depth),
+                "is_anomaly": False,
+                "anomaly_score": 0.0,
+                "anomaly_reason": None,
+                "url": props.get("url") or f"https://earthquake.usgs.gov/earthquakes/eventpage/{event_id}"
+            }
+            parsed_events.append(event_dict)
+
+            if len(map_markers) < 1000:
+                map_markers.append({
+                    "id": event_id,
+                    "magnitude": round(mag, 2),
+                    "place": place_clean,
+                    "region": region,
+                    "latitude": round(lat, 4),
+                    "longitude": round(lon, 4),
+                    "depth_km": round(depth, 2),
+                    "time": event_time.isoformat(),
+                    "url": event_dict["url"]
+                })
 
     # 5. Ordenamiento según parámetro solicitado
     if orderby == "time-asc":
@@ -230,7 +287,7 @@ async def query_usgs_historical(
     paged_events = parsed_events[offset : offset + page_size]
 
     return {
-        "source": "USGS Official Earthquake Catalog (fdsnws/event/1/query)",
+        "source": source_label,
         "search_type": search_type,
         "period": {
             "starttime": starttime,

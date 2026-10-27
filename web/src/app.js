@@ -273,8 +273,8 @@ async function loadTodayEvents() {
           </td>
           <td class="py-3 px-4 font-medium text-slate-800">
             ${ev.place}
-            ${ev.is_anomaly ? `<span class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">⚠️ Anomalía</span>` : ''}
-            ${ev.tsunami_alert ? `<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800">🌊 Tsunami</span>` : ''}
+            ${ev.is_anomaly ? `<span class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700/50"><svg class="w-3 h-3 mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>Anomalía</span>` : ''}
+            ${ev.tsunami_alert ? `<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 dark:bg-red-950/60 text-red-800 dark:text-red-300 border border-red-300 dark:border-red-700/50"><svg class="w-3 h-3 mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>Tsunami</span>` : ''}
           </td>
           <td class="py-3 px-4 text-slate-600">${ev.region || 'Global'}</td>
           <td class="py-3 px-4 text-slate-600 font-semibold">${ev.depth_km} km</td>
@@ -315,12 +315,9 @@ function applyMapTheme(isDark) {
   if (state.tileLayer) {
     state.map.removeLayer(state.tileLayer);
   }
-  const tileUrl = isDark
-    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-    : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-  const attribution = isDark
-    ? '© CARTO © OpenStreetMap contributors | SismoWatch'
-    : '© OpenStreetMap contributors | SismoWatch';
+  // Utilizar la capa universal y estable de OpenStreetMap tanto en modo claro como oscuro
+  const tileUrl = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+  const attribution = '© OpenStreetMap contributors | SismoWatch';
 
   state.tileLayer = L.tileLayer(tileUrl, { maxZoom: 18, attribution }).addTo(state.map);
 }
@@ -374,8 +371,8 @@ function renderMapMarkers(events) {
         <p class="text-slate-600">Profundidad: <b>${ev.depth_km} km</b></p>
         <p class="text-slate-600">Coordenadas: <b>${ev.latitude}, ${ev.longitude}</b></p>
         <p class="text-slate-500 mt-0.5">Fecha UTC: ${eventTimeStr}</p>
-        ${ev.is_anomaly ? `<p class="font-semibold text-amber-600 mt-1">⚠️ ${ev.anomaly_reason || 'Anomalía Sísmica'}</p>` : ''}
-        ${ev.tsunami_alert ? `<p class="font-bold text-red-600">🌊 Alerta de Tsunami</p>` : ''}
+        ${ev.is_anomaly ? `<p class="font-semibold text-amber-600 mt-1 flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>${ev.anomaly_reason || 'Anomalía Sísmica'}</p>` : ''}
+        ${ev.tsunami_alert ? `<p class="font-bold text-red-600 flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>Alerta de Tsunami</p>` : ''}
         ${ev.url ? `<p class="mt-2"><a href="${ev.url}" target="_blank" class="text-indigo-600 hover:underline font-semibold flex items-center gap-1">Ver ficha USGS oficial &rarr;</a></p>` : ''}
       </div>
     `);
@@ -692,8 +689,8 @@ async function loadEventsTable() {
           </td>
           <td class="py-3 px-4 font-medium text-slate-800">
             ${ev.place}
-            ${ev.is_anomaly ? `<span class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">⚠️ Anomalía</span>` : ''}
-            ${ev.tsunami_alert ? `<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800">🌊 Tsunami</span>` : ''}
+            ${ev.is_anomaly ? `<span class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700/50"><svg class="w-3 h-3 mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>Anomalía</span>` : ''}
+            ${ev.tsunami_alert ? `<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 dark:bg-red-950/60 text-red-800 dark:text-red-300 border border-red-300 dark:border-red-700/50"><svg class="w-3 h-3 mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>Tsunami</span>` : ''}
           </td>
           <td class="py-3 px-4 text-slate-600">${ev.region || 'Global'}</td>
           <td class="py-3 px-4 text-slate-600 font-semibold">${ev.depth_km} km</td>
@@ -1064,7 +1061,7 @@ window.handleChatSubmit = async function(e) {
     chatHistory.push({ role: "assistant", content: data.reply });
   } catch (err) {
     removeChatLoading(loadingId);
-    appendChatMessage("assistant", `⚠️ Lo siento, ocurrió un error consultando los datos de la Capa Gold: ${err.message}`);
+    appendChatMessage("assistant", `Lo siento, ocurrió un error consultando los datos de la Capa Gold: ${err.message}`);
   } finally {
     input.disabled = false;
     if (sendBtn) {
@@ -1156,12 +1153,14 @@ window.toggleTextToSpeech = function() {
   state.ttsEnabled = !state.ttsEnabled;
   const icon = document.getElementById("tts-icon");
   const label = document.getElementById("tts-label");
+  const svgSpeakerOn = `<svg class="w-4 h-4 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>`;
+  const svgSpeakerOff = `<svg class="w-4 h-4 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/></svg>`;
   if (state.ttsEnabled) {
-    if (icon) icon.textContent = "🔊";
+    if (icon) icon.innerHTML = svgSpeakerOn;
     if (label) label.textContent = "Voz: Activada";
     showToast("Lectura por voz activada", "success");
   } else {
-    if (icon) icon.textContent = "🔇";
+    if (icon) icon.innerHTML = svgSpeakerOff;
     if (label) label.textContent = "Voz: Desactivada";
     if (window.speechSynthesis) window.speechSynthesis.cancel();
     showToast("Lectura por voz desactivada", "info");
@@ -1284,7 +1283,9 @@ function toggleDarkMode() {
 function updateThemeIcon(isDark) {
   const icon = document.getElementById("theme-icon");
   if (icon) {
-    icon.textContent = isDark ? "☀️" : "🌙";
+    icon.innerHTML = isDark
+      ? `<svg class="w-4 h-4 text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>`
+      : `<svg class="w-4 h-4 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>`;
   }
 }
 window.toggleDarkMode = toggleDarkMode;

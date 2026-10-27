@@ -138,6 +138,35 @@ def test_chat_ai_endpoint(monkeypatch):
     assert "gold.fact_earthquakes" in data["data_sources"]
     assert "5.4" in data["reply"] or "Chile" in data["reply"]
 
+def test_chat_ai_off_topic_guardrail(monkeypatch):
+    """
+    Verifica que el Asistente IA rechace cortésmente preguntas ajenas al dominio sismológico.
+    """
+    monkeypatch.setattr("api.app.routers.chat.fetch_gold_context", lambda: {
+        "kpis": {"events_24h": 10, "max_magnitude": 5.4, "avg_magnitude": 2.1, "tsunami_alerts": 0},
+        "top_events": [],
+        "recent_events": [],
+        "last_report": {},
+        "quality": {},
+        "anomalies": []
+    })
+    
+    login_res = client.post("/auth/login", json={
+        "username": api_settings.VIEWER_USERNAME,
+        "password": api_settings.VIEWER_PASSWORD
+    })
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    res = client.post("/api/chat", json={
+        "message": "¿Cómo se prepara una receta de pizza napolitana?",
+        "history": []
+    }, headers=headers)
+    
+    assert res.status_code == 200
+    data = res.json()
+    assert "únicamente puedo responder preguntas relacionadas con el monitoreo de eventos sísmicos" in data["reply"]
+
 def test_usgs_historical_query_last_days(monkeypatch):
     """
     Verifica la consulta al catálogo oficial de USGS para los últimos N días.
