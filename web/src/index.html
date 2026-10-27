@@ -287,8 +287,9 @@
               <!-- 1. Tipo de Consulta -->
               <div>
                 <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Tipo de Consulta</label>
-                <select id="filter-search-type" onchange="onSearchTypeChange()" class="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 bg-white font-medium">
+                <select id="filter-search-type" onchange="onSearchTypeChange()" class="w-full text-xs px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800 dark:text-white font-medium">
                   <option value="last_n_days" selected>Últimos N días</option>
+                  <option value="all">Todo el Catálogo Histórico (Sin límite)</option>
                   <option value="specific_day">Día Específico (24 Horas)</option>
                   <option value="custom_range">Rango Personalizado de Fechas</option>
                   <option value="full_month">Mes Completo</option>

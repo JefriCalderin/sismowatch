@@ -661,15 +661,21 @@ async function loadEventsTable() {
       } else if (searchType === "full_year") {
         calcStartDate = `${fullYear}-01-01`;
         calcEndDate = `${fullYear}-12-31`;
+      } else if (searchType === "all") {
+        calcStartDate = "";
+        calcEndDate = "";
       }
 
       const qParams = new URLSearchParams({
         page: state.filters.page,
         page_size: state.filters.pageSize,
-        min_magnitude: minMag
+        min_magnitude: minMag,
+        order_by: orderby
       });
-      if (calcStartDate) qParams.append("start_date", calcStartDate);
-      if (calcEndDate) qParams.append("end_date", calcEndDate);
+      if (searchType !== "all") {
+        if (calcStartDate) qParams.append("start_date", calcStartDate);
+        if (calcEndDate) qParams.append("end_date", calcEndDate);
+      }
 
       url = `${API_BASE}/api/events?${qParams.toString()}`;
       const res = await fetchAuth(url);
@@ -678,7 +684,7 @@ async function loadEventsTable() {
 
       if (countBadge) countBadge.textContent = `${data.total} sismos en Catálogo Gold (M ≥ ${minMag})`;
       if (periodBadge) {
-        periodBadge.textContent = calcStartDate ? `Período Gold: ${calcStartDate} al ${calcEndDate}` : `Almacenados en PostgreSQL Gold`;
+        periodBadge.textContent = (searchType !== "all" && calcStartDate) ? `Período Gold: ${calcStartDate} al ${calcEndDate}` : `Catálogo Completo Gold (PostgreSQL + MinIO)`;
       }
     }
 

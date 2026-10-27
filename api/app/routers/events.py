@@ -348,6 +348,7 @@ def get_events(
     tsunami_only: Optional[bool] = Query(None, description="Filtrar eventos con tsunami"),
     start_date: Optional[str] = Query(None, description="Fecha inicial YYYY-MM-DD"),
     end_date: Optional[str] = Query(None, description="Fecha final YYYY-MM-DD"),
+    order_by: Optional[str] = Query("time", description="Ordenamiento: 'time' (recientes) o 'magnitude' (mayor magnitud)"),
     current_user: dict = Depends(require_role(["viewer", "admin"]))
 ):
     """
@@ -391,6 +392,7 @@ def get_events(
     total_count = int(total_row.get("total", 0))
 
     offset = (page - 1) * page_size
+    order_sql = "ORDER BY magnitude DESC, event_time DESC" if order_by == "magnitude" else "ORDER BY event_time DESC"
     query = f"""
         SELECT
             id, magnitude, place, region, event_time, updated_time,
@@ -399,7 +401,7 @@ def get_events(
             anomaly_reason, url
         FROM gold.fact_earthquakes
         WHERE {where_sql}
-        ORDER BY event_time DESC
+        {order_sql}
         LIMIT %s OFFSET %s;
     """  # nosec B608
     query_params = tuple(params + [page_size, offset])

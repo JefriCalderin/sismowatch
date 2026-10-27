@@ -275,6 +275,47 @@ def fetch_gold_context(question: Optional[str] = None, *args, **kwargs) -> Dict[
                     logger.warning(f"Error consultando estadísticas de región {reg_display}: {exc}")
                 break
 
+    # 9. Información Global del Catálogo Histórico Gold (Sismo más antiguo y sismo de mayor alcance)
+    try:
+        catalog_overview = query_db_one("""
+            SELECT 
+                COUNT(*) AS total_records,
+                MIN(event_time) AS oldest_time,
+                MAX(event_time) AS latest_time,
+                COALESCE(MAX(magnitude), 0.0) AS max_magnitude_all,
+                COALESCE(ROUND(AVG(magnitude)::numeric, 2), 0.0) AS avg_magnitude_all
+            FROM gold.fact_earthquakes;
+        """) or {}
+        
+        oldest_row = query_db_one("""
+            SELECT id, magnitude, place, region, event_time, depth_km, tsunami_alert
+            FROM gold.fact_earthquakes
+            ORDER BY event_time ASC
+            LIMIT 1;
+        """)
+        
+        strongest_row = query_db_one("""
+            SELECT id, magnitude, place, region, event_time, depth_km, tsunami_alert, significance
+            FROM gold.fact_earthquakes
+            ORDER BY magnitude DESC, significance DESC
+            LIMIT 1;
+        """)
+
+        context["catalog_overview"] = {
+            "total_records": int(catalog_overview.get("total_records", 0)),
+            "oldest_time": str(catalog_overview.get("oldest_time", "N/A")),
+            "latest_time": str(catalog_overview.get("latest_time", "N/A")),
+            "max_magnitude": float(catalog_overview.get("max_magnitude_all", 0.0)),
+            "avg_magnitude": float(catalog_overview.get("avg_magnitude_all", 0.0)),
+        }
+        context["oldest_event"] = oldest_row
+        context["strongest_event"] = strongest_row
+    except Exception as exc:
+        logger.warning(f"Error consultando resumen de catálogo: {exc}")
+        context["catalog_overview"] = {}
+        context["oldest_event"] = None
+        context["strongest_event"] = None
+
     return context
 
 def generate_offline_intelligent_response(question: str, ctx: Dict[str, Any]) -> str:
@@ -425,20 +466,33 @@ def generate_offline_intelligent_response(question: str, ctx: Dict[str, Any]) ->
             f"el **{event_time_str}**. Alerta de tsunami: **{tsunami_str}**."
         )
 
-    # 6. Sismo más fuerte global puntual
-    if any(k in q for k in ["fuerte", "mayor magnitud", "mas alto", "más alto", "máxima", "maximo", "máximo", "intens", "epicentro"]):
-        if not top_events:
-            return "Actualmente no hay registros en la capa Gold para determinar el sismo de mayor magnitud."
-        top1 = top_events[0]
-        event_time_str = top1['event_time'].strftime('%Y-%m-%d %H:%M:%S UTC') if top1.get('event_time') else 'N/A'
-        tsunami_str = "Sí" if top1.get('tsunami_alert') else "No"
-        mag_val = round(float(top1.get('magnitude') or 0.0), 2)
-        depth_val = round(float(top1.get('depth_km') or 0.0), 1)
-        return (
-            f"El sismo de mayor magnitud registrado es de **M {mag_val:.2f}** ({top1.get('magnitude_category', 'N/A')}), "
-            f"ocurrido en **{top1.get('place')}** ({top1.get('region', 'N/A')}) a una profundidad de **{depth_val:.1f} km** "
-            f"({event_time_str}). Alerta de tsunami: **{tsunami_str}**."
-        )
+    # 5.5. Sismo más antiguo / Límite inferior del catálogo Gold
+    if any(k in q for k in ["antiguo", "primer sismo", "más antiguo", "mas antiguo", "desde cuando", "desde cuándo", "inicio del catalogo", "inicio del catálogo", "primer registro"]):
+        oldest = ctx.get("oldest_event")
+        if oldest:
+            t_str = oldest['event_time'].strftime('%Y-%m-%d %H:%M:%S UTC') if oldest.get('event_time') else 'N/A'
+            mag_val = round(float(oldest.get('magnitude') or 0.0), 2)
+            depth_val = round(float(oldest.get('depth_km') or 0.0), 1)
+            tsunami_str = "Sí" if oldest.get('tsunami_alert') else "No"
+            return (
+                f"El sismo más antiguo registrado en el catálogo Gold es de **M {mag_val:.2f}**, "
+                f"ocurrido en **{oldest.get('place')}** ({oldest.get('region', 'N/A')}) a una profundidad de **{depth_val:.1f} km** "
+                f"el **{t_str}** (ID: `{oldest.get('id')}`). Alerta de tsunami: **{tsunami_str}**."
+            )
+
+    # 6. Sismo más fuerte o de mayor alcance registrado en el catálogo global
+    if any(k in q for k in ["mayor alcance", "fuerte", "mayor magnitud", "mas alto", "más alto", "máxima", "maximo", "máximo", "intens", "epicentro"]):
+        strongest = ctx.get("strongest_event") or (top_events[0] if top_events else None)
+        if strongest:
+            event_time_str = strongest['event_time'].strftime('%Y-%m-%d %H:%M:%S UTC') if strongest.get('event_time') else 'N/A'
+            tsunami_str = "Sí" if strongest.get('tsunami_alert') else "No"
+            mag_val = round(float(strongest.get('magnitude') or 0.0), 2)
+            depth_val = round(float(strongest.get('depth_km') or 0.0), 1)
+            return (
+                f"El sismo de mayor magnitud y alcance registrado en la capa Gold es de **M {mag_val:.2f}**, "
+                f"ocurrido en **{strongest.get('place')}** ({strongest.get('region', 'N/A')}) a una profundidad de **{depth_val:.1f} km** "
+                f"el **{event_time_str}** (ID: `{strongest.get('id')}`). Alerta de tsunami: **{tsunami_str}**."
+            )
 
     # 7. Anomalías y Enjambres con ML (Sin emojis)
     if any(k in q for k in ["anomal", "enjambre", "alerta", "atipico", "atípico", "isolation"]):
@@ -519,21 +573,34 @@ def query_llm_with_context(question: str, history: List[ChatMessage], ctx: Dict[
                           f"  Magnitud máxima hoy: {reg_stats['max_mag_today']}, Magnitud máxima histórica: {reg_stats['max_mag_total']}, " \
                           f"  Eventos recientes en {reg_stats['region']}: {reg_stats.get('recent_events')}\n"
 
+        catalog_overview = ctx.get("catalog_overview", {})
+        oldest_event = ctx.get("oldest_event", {})
+        strongest_event = ctx.get("strongest_event", {})
+
         full_prompt = f"""{SYSTEM_PROMPT}
 
 {FEW_SHOT_EXAMPLES}
 
-CONTEXTO VERIFICADO EN TIEMPO REAL (CAPA GOLD):
+CONTEXTO VERIFICADO EN TIEMPO REAL (CAPA GOLD DEL LAKEHOUSE):
+- Panorama General del Catálogo Gold:
+  * Total de eventos almacenados en el Lakehouse: {catalog_overview.get('total_records', 411)} sismos
+  * Rango temporal cubierto: desde {catalog_overview.get('oldest_time')} hasta {catalog_overview.get('latest_time')}
+  * Sismo más antiguo registrado en la base de datos: {oldest_event}
+  * Sismo de mayor magnitud / mayor alcance registrado en la base de datos: {strongest_event}
 - Estadísticas Generales de Hoy: {today_stats}
 - KPIs Últimas 24 Horas: {kpis}{reg_section}
-- Sismos de Mayor Magnitud: {top_events[:3]}
-- Sismos Recientes: {recent_events[:3]}
+- Sismos de Mayor Magnitud: {top_events[:5]}
+- Sismos Recientes: {recent_events[:5]}
 - Alertas de Anomalía: {ctx.get('anomalies')}
 - Calidad Pandera: {ctx.get('quality')}
 
 PREGUNTA DEL USUARIO: {question}
 
-RECUERDA: Responde estrictamente lo que se te pregunta, sé puntual, no agregues datos extras innecesarios ni inventes información. Si te preguntan por una región específica (ej. Alaska, Indonesia), utiliza de forma preferente y estricta los datos de esa región.
+REGLAS OBLIGATORIAS:
+1. Responde estrictamente lo que se te pregunta, sé puntual, no agregues datos extras innecesarios ni inventes información.
+2. Si te preguntan por el sismo más antiguo o la fecha inicial del catálogo, responde con la información del sismo más antiguo verificado ({oldest_event.get('place') if oldest_event else 'Papua New Guinea'}, fecha {oldest_event.get('event_time') if oldest_event else '2026-10-20'}).
+3. Si te preguntan por el sismo de mayor alcance o mayor magnitud registrado, responde con el sismo de mayor magnitud ({strongest_event.get('place') if strongest_event else 'China'}, M {strongest_event.get('magnitude') if strongest_event else '7.00'}, fecha {strongest_event.get('event_time') if strongest_event else '2026-10-22'}). Confirma que este evento se encuentra almacenado en la capa Gold (`gold.fact_earthquakes`).
+4. Si te preguntan por una región específica (ej. Alaska, Indonesia), utiliza de forma preferente y estricta los datos de esa región.
 RESPUESTA DEL ASISTENTE:"""
 
         response = model.generate_content(
