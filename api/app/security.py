@@ -7,7 +7,7 @@ from typing import Optional, List, Dict, Any
 import hashlib
 import hmac
 from jose import JWTError, jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from api.app.config import api_settings
 
@@ -32,20 +32,29 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     to_encode.update({"exp": expire, "iat": datetime.now(timezone.utc)})
     return jwt.encode(to_encode, api_settings.JWT_SECRET, algorithm=api_settings.JWT_ALGORITHM)
 
-def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer)) -> Dict[str, Any]:
+def get_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer),
+    token: Optional[str] = Query(None, description="Token JWT alternativo en query param para descargas de archivos directas")
+) -> Dict[str, Any]:
     """
-    Dependencia de seguridad: Valida el token JWT en el encabezado Authorization.
+    Dependencia de seguridad: Valida el token JWT en el encabezado Authorization Bearer
+    o en el parámetro de consulta ?token= para permitir descargas directas en el navegador.
     Si no hay token o es inválido, rechaza con HTTP 401 Unauthorized.
     """
-    if not credentials or not credentials.credentials:
+    raw_token = None
+    if credentials and credentials.credentials:
+        raw_token = credentials.credentials
+    elif token:
+        raw_token = token
+
+    if not raw_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Acceso no autorizado: Se requiere token de autenticación Bearer válido.",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    token = credentials.credentials
     try:
-        payload = jwt.decode(token, api_settings.JWT_SECRET, algorithms=[api_settings.JWT_ALGORITHM])
+        payload = jwt.decode(raw_token, api_settings.JWT_SECRET, algorithms=[api_settings.JWT_ALGORITHM])
         username: str = payload.get("sub")
         role: str = payload.get("role")
         if not username or not role:

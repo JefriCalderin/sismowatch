@@ -44,6 +44,12 @@ class Settings:
     # Spark
     SPARK_MASTER_URL: str = os.getenv("SPARK_MASTER_URL", "spark://spark-master:7077")
 
+    # MinIO Object Storage
+    MINIO_ENDPOINT: str = os.getenv("MINIO_ENDPOINT", "minio:9000")
+    MINIO_ROOT_USER: str = os.getenv("MINIO_ROOT_USER", "minioadmin")
+    MINIO_ROOT_PASSWORD: str = os.getenv("MINIO_ROOT_PASSWORD", "MinioAdminSismo2026!")
+    MINIO_SECURE: bool = os.getenv("MINIO_SECURE", "false").lower() == "true"
+
     @classmethod
     def get_db_uri(cls, role: str = "transform") -> str:
         """Obtiene la URI de conexión a PostgreSQL según el rol solicitado."""

@@ -280,5 +280,39 @@ def generate_daily_ai_report(target_date: Optional[date] = None) -> Dict[str, An
     )
     execute_query(save_report_query, save_params, role="transform")
 
+    # 3. Sincronizar artefacto en MinIO Object Storage (Data Lake)
+    try:
+        from airflow.include.storage_minio import upload_report_to_minio
+        findings_html = "".join([f"<li>{item}</li>" for item in (report_data.get("key_findings") or [])])
+        rec_metrics = metrics or {}
+        metrics_html = "".join([f"<tr><td style='padding:6px;font-weight:bold;'>{k}</td><td style='padding:6px;'>{v}</td></tr>" for k, v in rec_metrics.items()])
+        html_artifact = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>{report_data.get('title')}</title>
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 40px; color: #1e293b; background: #fff; max-width: 900px; margin: 0 auto; }}
+    h1 {{ color: #0f172a; border-bottom: 2px solid #3b82f6; padding-bottom: 8px; }}
+    .badge {{ display: inline-block; padding: 4px 10px; background: #e0f2fe; color: #0369a1; border-radius: 9999px; font-size: 12px; font-weight: 600; }}
+    .summary {{ font-size: 16px; line-height: 1.6; background: #f8fafc; border-left: 4px solid #3b82f6; padding: 16px; margin: 20px 0; border-radius: 4px; }}
+    table {{ width: 100%; border-collapse: collapse; margin-top: 15px; background: #f1f5f9; border-radius: 6px; }}
+  </style>
+</head>
+<body>
+  <span class="badge">SismoWatch AI Data Lake Artifact</span>
+  <h1>{report_data.get('title')}</h1>
+  <p><strong>Fecha de Emisión:</strong> {r_date_str}</p>
+  <div class="summary"><p>{report_data.get('executive_summary')}</p></div>
+  <h3>Hallazgos Clave Verificados</h3>
+  <ul>{findings_html}</ul>
+  <h3>Métricas Consolidadas</h3>
+  <table>{metrics_html}</table>
+</body>
+</html>"""
+        upload_report_to_minio(r_date_str, html_artifact, report_data)
+    except Exception as exc:
+        logger.warning(f"No se pudo sincronizar reporte en MinIO: {exc}")
+
     logger.info(f"Reporte diario de IA generado para {r_date_str} (Estado: {generation_status}, Latencia: {latency_ms}ms).")
     return report_data

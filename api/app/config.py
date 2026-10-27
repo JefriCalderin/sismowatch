@@ -35,6 +35,18 @@ class ApiSettings:
     AIRFLOW_ADMIN_USER: str = os.getenv("AIRFLOW_ADMIN_USER", "admin")
     AIRFLOW_ADMIN_PASSWORD: str = os.getenv("AIRFLOW_ADMIN_PASSWORD", "SismoAdmin2026!")
 
+    # MinIO Object Storage
+    MINIO_ENDPOINT: str = os.getenv("MINIO_ENDPOINT", "minio:9000")
+    MINIO_ROOT_USER: str = os.getenv("MINIO_ROOT_USER", "minioadmin")
+    MINIO_ROOT_PASSWORD: str = os.getenv("MINIO_ROOT_PASSWORD", "MinioAdminSismo2026!")
+    MINIO_SECURE: bool = os.getenv("MINIO_SECURE", "false").lower() == "true"
+
+    # Configuración de Inteligencia Artificial
+    AI_PROVIDER: str = os.getenv("AI_PROVIDER", "gemini")
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    AI_MODEL_NAME: str = os.getenv("AI_MODEL_NAME", "gemini-1.5-flash")
+
     @property
     def db_uri(self) -> str:
         return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"

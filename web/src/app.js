@@ -482,9 +482,13 @@ async function loadReportsView() {
               <p class="text-xs text-slate-500">Fecha de Referencia: ${rep.report_date} | Modelo: ${rep.model_name}</p>
             </div>
             <div class="flex items-center gap-2">
-              <a href="${API_BASE}/api/reports/export?format=html&target_date=${rep.report_date}" target="_blank" class="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg flex items-center gap-1">
-                Descargar HTML / PDF
-              </a>
+              <button onclick="downloadExport('html', '${rep.report_date}')" class="px-3 py-1.5 text-xs font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg flex items-center gap-1 cursor-pointer transition">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                Descargar HTML
+              </button>
+              <button onclick="downloadExport('json', '${rep.report_date}')" class="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg flex items-center gap-1 cursor-pointer transition">
+                JSON
+              </button>
             </div>
           </div>
           
@@ -657,26 +661,229 @@ function showToast(message, type = "info") {
 // Control de Pestañas
 function switchTab(tabId) {
   state.currentTab = tabId;
-  ["dashboard", "reports", "pipeline"].forEach(tab => {
+  ["dashboard", "chat", "reports", "pipeline"].forEach(tab => {
     const section = document.getElementById(`tab-section-${tab}`);
     const btn = document.getElementById(`nav-btn-${tab}`);
-    if (tab === tabId) {
-      section.classList.remove("hidden");
-      btn.className = "px-3 py-2 text-sm font-bold text-indigo-600 border-b-2 border-indigo-600";
-    } else {
-      section.classList.add("hidden");
-      btn.className = "px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900";
+    if (section && btn) {
+      if (tab === tabId) {
+        section.classList.remove("hidden");
+        btn.className = "px-3 py-2 text-sm font-bold text-indigo-600 border-b-2 border-indigo-600";
+      } else {
+        section.classList.add("hidden");
+        btn.className = "px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900";
+      }
     }
   });
 
   if (tabId === "dashboard") {
     loadKPIs();
     setTimeout(() => { if (state.map) state.map.invalidateSize(); }, 200);
+  } else if (tabId === "chat") {
+    setTimeout(() => {
+      const input = document.getElementById("chat-input");
+      if (input) input.focus();
+    }, 100);
   } else if (tabId === "reports") {
     loadReportsView();
   } else if (tabId === "pipeline") {
     loadPipelineView();
   }
+}
+
+// ------------------------------------------------------------------------------
+// Función de Descarga Segura de Reportes y Datos (Resuelve Error 401 de Token)
+// ------------------------------------------------------------------------------
+window.downloadExport = async function(format = 'csv', targetDate = null) {
+  try {
+    const token = state.token;
+    if (!token) {
+      showToast("Debe iniciar sesión para descargar reportes.", "warning");
+      return;
+    }
+    let url = `${API_BASE}/api/reports/export?format=${format}&download=true`;
+    if (targetDate) url += `&target_date=${encodeURIComponent(targetDate)}`;
+    url += `&token=${encodeURIComponent(token)}`;
+
+    showToast(`Preparando descarga (${format.toUpperCase()})...`, "info");
+    
+    const res = await fetch(url, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Error descargando archivo" }));
+      throw new Error(err.detail || "Error en el servidor al exportar");
+    }
+
+    const blob = await res.blob();
+    const disposition = res.headers.get("content-disposition");
+    let ext = format === 'html' ? 'html' : (format === 'json' ? 'json' : 'csv');
+    let filename = `sismowatch_${format}_${targetDate || 'export'}.${ext}`;
+    if (disposition && disposition.indexOf("filename=") !== -1) {
+      const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+      if (matches != null && matches[1]) {
+        filename = matches[1].replace(/['"]/g, '');
+      }
+    }
+
+    const blobUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(blobUrl);
+    showToast(`Archivo descargado con éxito: ${filename}`, "success");
+  } catch (err) {
+    showToast(`Error al descargar: ${err.message}`, "error");
+  }
+};
+
+// ------------------------------------------------------------------------------
+// 8. Chat Asistente de IA (Capa Gold)
+// ------------------------------------------------------------------------------
+let chatHistory = [];
+
+window.sendQuickChatMessage = function(promptText) {
+  const input = document.getElementById("chat-input");
+  if (input) {
+    input.value = promptText;
+    handleChatSubmit(new Event("submit"));
+  }
+};
+
+window.handleChatSubmit = async function(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  const input = document.getElementById("chat-input");
+  const sendBtn = document.getElementById("chat-send-btn");
+  if (!input) return;
+  const message = (input.value || "").trim();
+  if (!message) return;
+
+  // Renderizar mensaje de usuario
+  appendChatMessage("user", message);
+  input.value = "";
+  input.disabled = true;
+  if (sendBtn) {
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = `<span>Consultando...</span>`;
+  }
+
+  // Renderizar indicador de carga asistente
+  const loadingId = appendChatLoading();
+
+  try {
+    const res = await fetchAuth(`${API_BASE}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: message,
+        history: chatHistory.slice(-6)
+      })
+    });
+
+    const data = await res.json();
+    removeChatLoading(loadingId);
+    appendChatMessage("assistant", data.reply, data.data_sources);
+    
+    // Guardar en historial
+    chatHistory.push({ role: "user", content: message });
+    chatHistory.push({ role: "assistant", content: data.reply });
+  } catch (err) {
+    removeChatLoading(loadingId);
+    appendChatMessage("assistant", `⚠️ Lo siento, ocurrió un error consultando los datos de la Capa Gold: ${err.message}`);
+  } finally {
+    input.disabled = false;
+    if (sendBtn) {
+      sendBtn.disabled = false;
+      sendBtn.innerHTML = `<span>Enviar</span><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>`;
+    }
+    input.focus();
+  }
+};
+
+function formatMarkdownToHtml(text) {
+  if (!text) return "";
+  let html = text
+    .replace(/^### (.*$)/gim, '<h4 class="font-bold text-indigo-950 mt-2 mb-1">$1</h4>')
+    .replace(/^## (.*$)/gim, '<h3 class="font-bold text-indigo-950 mt-3 mb-1 text-base">$1</h3>')
+    .replace(/^# (.*$)/gim, '<h2 class="font-extrabold text-indigo-950 mt-3 mb-2 text-lg">$1</h2>')
+    .replace(/\*\*(.*?)\*\*/gim, '<b>$1</b>')
+    .replace(/\*(.*?)\*/gim, '<i>$1</i>')
+    .replace(/`(.*?)`/gim, '<code class="px-1.5 py-0.5 bg-slate-100 text-indigo-700 rounded font-mono text-xs">$1</code>')
+    .replace(/^\- (.*$)/gim, '<li class="ml-4 list-disc">$1</li>')
+    .replace(/\n\n/gim, '<br/><br/>')
+    .replace(/\n/gim, '<br/>');
+  return html;
+}
+
+function appendChatMessage(role, content, sources = []) {
+  const container = document.getElementById("chat-messages");
+  if (!container) return;
+
+  const msgDiv = document.createElement("div");
+
+  if (role === "user") {
+    msgDiv.className = "flex items-start gap-3 justify-end";
+    msgDiv.innerHTML = `
+      <div class="bg-indigo-600 text-white rounded-2xl rounded-tr-none p-4 max-w-xl text-sm leading-relaxed shadow-sm">
+        <p>${content}</p>
+      </div>
+      <div class="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-xs shrink-0">
+        ${state.user ? state.user.username.slice(0, 2).toUpperCase() : 'TU'}
+      </div>
+    `;
+  } else {
+    msgDiv.className = "flex items-start gap-3";
+    const formatted = formatMarkdownToHtml(content);
+    let sourcesBadge = "";
+    if (sources && sources.length > 0) {
+      sourcesBadge = `
+        <div class="mt-3 pt-2 border-t border-slate-200/60 flex flex-wrap gap-1 items-center text-[11px] text-slate-500">
+          <span class="font-semibold text-slate-400">Fuentes Gold:</span>
+          ${sources.map(s => `<span class="px-1.5 py-0.5 bg-slate-200 text-slate-700 rounded font-mono text-[10px]">${s}</span>`).join(" ")}
+        </div>
+      `;
+    }
+
+    msgDiv.innerHTML = `
+      <div class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0">IA</div>
+      <div class="bg-slate-50 border border-slate-200 rounded-2xl rounded-tl-none p-4 max-w-2xl text-sm text-slate-800 leading-relaxed shadow-2xs">
+        <div>${formatted}</div>
+        ${sourcesBadge}
+      </div>
+    `;
+  }
+
+  container.appendChild(msgDiv);
+  container.scrollTop = container.scrollHeight;
+}
+
+function appendChatLoading() {
+  const container = document.getElementById("chat-messages");
+  if (!container) return "";
+  const id = "loading-" + Date.now();
+  const div = document.createElement("div");
+  div.id = id;
+  div.className = "flex items-start gap-3";
+  div.innerHTML = `
+    <div class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0">IA</div>
+    <div class="bg-slate-50 border border-slate-200 rounded-2xl rounded-tl-none p-4 text-xs text-slate-500 flex items-center gap-2 shadow-2xs">
+      <span class="w-2 h-2 rounded-full bg-indigo-500 animate-bounce"></span>
+      <span class="w-2 h-2 rounded-full bg-indigo-500 animate-bounce [animation-delay:0.2s]"></span>
+      <span class="w-2 h-2 rounded-full bg-indigo-500 animate-bounce [animation-delay:0.4s]"></span>
+      <span>Consultando tablas Gold y procesando sismicidad...</span>
+    </div>
+  `;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return id;
+}
+
+function removeChatLoading(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
 }
 
 // ------------------------------------------------------------------------------

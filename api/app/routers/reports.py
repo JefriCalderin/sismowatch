@@ -6,7 +6,7 @@ import csv
 from typing import List, Optional
 from datetime import date
 from fastapi import APIRouter, Depends, Query, HTTPException, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from api.app.models import AIReportResponse
 from api.app.security import require_role
 from api.app.database import query_db, query_db_one
@@ -34,12 +34,14 @@ def get_reports(
 
 @router.get("/export")
 def export_reports_or_events(
-    format: str = Query("csv", pattern="^(csv|html)$"),
+    format: str = Query("csv", pattern="^(csv|html|json)$"),
     target_date: Optional[str] = Query(None, description="Fecha YYYY-MM-DD específica"),
+    download: bool = Query(True, description="Si true, fuerza la descarga como archivo"),
     current_user: dict = Depends(require_role(["viewer", "admin"]))
 ):
     """
-    Exporta datos de eventos o reportes a formato CSV o HTML descargable.
+    Exporta datos de eventos o reportes a formato CSV, HTML o JSON descargable.
+    Soporta autenticación mediante Header Authorization Bearer o parámetro ?token=.
     """
     if format == "csv":
         where = "WHERE event_date = %s" if target_date else ""
@@ -67,53 +69,85 @@ def export_reports_or_events(
             ])
         
         output.seek(0)
-        filename = f"sismowatch_report_{target_date or 'latest'}.csv"
+        filename = f"sismowatch_eventos_{target_date or 'recientes'}.csv"
         return StreamingResponse(
             iter([output.getvalue()]),
             media_type="text/csv",
             headers={"Content-Disposition": f"attachment; filename={filename}"}
         )
 
-    elif format == "html":
-        # Exportar reporte en HTML imprimible
-        report_query = """
+    elif format == "json":
+        where = "WHERE report_date = %s" if target_date else ""
+        params = (target_date,) if target_date else ()
+        report_query = f"""
             SELECT report_date, title, executive_summary, key_findings, calculated_metrics, model_name, created_at
             FROM gold.ai_reports
+            {where}
             ORDER BY report_date DESC
             LIMIT 1;
-        """
-        report = query_db_one(report_query)
+        """  # nosec B608
+        report = query_db_one(report_query, params)
         if not report:
-            html_content = "<h1>No hay reportes disponibles para exportar</h1>"
+            raise HTTPException(status_code=404, detail="No se encontró reporte para exportar")
+        
+        filename = f"sismowatch_report_{report.get('report_date')}.json"
+        headers = {"Content-Disposition": f"attachment; filename={filename}"} if download else {}
+        return JSONResponse(content=report, headers=headers)
+
+    elif format == "html":
+        # Exportar reporte en HTML imprimible
+        where = "WHERE report_date = %s" if target_date else ""
+        params = (target_date,) if target_date else ()
+        report_query = f"""
+            SELECT report_date, title, executive_summary, key_findings, calculated_metrics, model_name, created_at
+            FROM gold.ai_reports
+            {where}
+            ORDER BY report_date DESC
+            LIMIT 1;
+        """  # nosec B608
+        report = query_db_one(report_query, params)
+        if not report:
+            html_content = "<h1>No hay reportes disponibles para la fecha solicitada</h1>"
+            filename = "reporte_no_disponible.html"
         else:
             findings_html = "".join([f"<li>{item}</li>" for item in (report.get("key_findings") or [])])
+            rec_metrics = report.get("calculated_metrics") or {}
+            metrics_html = "".join([f"<tr><td style='padding:6px;font-weight:bold;'>{k}</td><td style='padding:6px;'>{v}</td></tr>" for k, v in rec_metrics.items()])
+            filename = f"sismowatch_reporte_{report.get('report_date')}.html"
             html_content = f"""<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <title>{report.get('title')}</title>
   <style>
-    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 40px; color: #1e293b; background: #fff; }}
+    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 40px; color: #1e293b; background: #fff; max-width: 900px; margin: 0 auto; }}
     h1 {{ color: #0f172a; border-bottom: 2px solid #3b82f6; padding-bottom: 8px; }}
     .badge {{ display: inline-block; padding: 4px 10px; background: #e0f2fe; color: #0369a1; border-radius: 9999px; font-size: 12px; font-weight: 600; }}
-    .summary {{ font-size: 16px; line-height: 1.6; background: #f8fafc; border-left: 4px solid #3b82f6; padding: 16px; margin: 20px 0; }}
+    .summary {{ font-size: 16px; line-height: 1.6; background: #f8fafc; border-left: 4px solid #3b82f6; padding: 16px; margin: 20px 0; border-radius: 4px; }}
     ul {{ line-height: 1.8; }}
+    table {{ width: 100%; border-collapse: collapse; margin-top: 15px; background: #f1f5f9; border-radius: 6px; }}
     .footer {{ margin-top: 40px; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 12px; }}
+    @media print {{ body {{ padding: 20px; }} }}
   </style>
 </head>
 <body>
   <span class="badge">SismoWatch AI Intelligence Report</span>
   <h1>{report.get('title')}</h1>
-  <p><strong>Fecha de Emisión:</strong> {report.get('report_date')} | <strong>Modelo:</strong> {report.get('model_name')}</p>
+  <p><strong>Fecha de Emisión:</strong> {report.get('report_date')} | <strong>Modelo IA:</strong> {report.get('model_name')}</p>
   <div class="summary">
-    <h3>Resumen Ejecutivo</h3>
+    <h3 style="margin-top:0;">Resumen Ejecutivo</h3>
     <p>{report.get('executive_summary')}</p>
   </div>
   <h3>Hallazgos Clave Verificados</h3>
   <ul>{findings_html}</ul>
+  <h3>Métricas de la Capa Gold Consolidadas</h3>
+  <table>{metrics_html}</table>
   <div class="footer">
-    Reporte generado automáticamente bajo Arquitectura Medallón de Datos. Verificado contra cifras de PostgreSQL Gold.
+    Reporte generado automáticamente bajo Arquitectura Medallón de Datos. Verificado matemáticamente contra cifras de PostgreSQL Gold.
   </div>
 </body>
 </html>"""
-        return Response(content=html_content, media_type="text/html")
+        headers = {}
+        if download:
+            headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return Response(content=html_content, media_type="text/html", headers=headers)

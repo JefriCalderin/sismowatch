@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from api.app.config import api_settings
-from api.app.routers import auth, kpis, events, stats, reports, stream, admin
+from api.app.routers import auth, kpis, events, stats, reports, stream, admin, chat
 
 app = FastAPI(
     title="SismoWatch Data Platform API",
@@ -31,6 +31,7 @@ app.include_router(kpis.router)
 app.include_router(events.router)
 app.include_router(stats.router)
 app.include_router(reports.router)
+app.include_router(chat.router)
 app.include_router(stream.router)
 app.include_router(admin.router)
 
