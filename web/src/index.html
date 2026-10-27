@@ -6,6 +6,11 @@
   <title>SismoWatch - Plataforma Global de Monitoreo Sísmico</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class'
+    };
+  </script>
   <!-- Leaflet CSS & JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -35,7 +40,12 @@
       </div>
 
       <!-- Estado en Vivo y Usuario -->
-      <div class="flex items-center gap-4">
+      <div class="flex items-center gap-3 sm:gap-4">
+        <!-- Selector Modo Oscuro -->
+        <button id="theme-toggle-btn" onclick="toggleDarkMode()" class="p-1.5 sm:p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer flex items-center justify-center border border-slate-200" title="Alternar modo oscuro / claro">
+          <span id="theme-icon" class="text-sm">🌙</span>
+        </button>
+
         <div class="hidden sm:flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-full border border-slate-200">
           <span id="live-indicator" class="live-indicator"></span>
           <span id="live-status-text" class="text-xs font-bold text-emerald-600">EN VIVO</span>

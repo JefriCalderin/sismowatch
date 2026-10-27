@@ -1,7 +1,8 @@
 """
 Router de Chat Asistente de IA con Acceso a la Capa Gold (SismoWatch AI Assistant).
-Permite a usuarios autenticados consultar en lenguaje natural sobre sismos, métricas,
-anomalías, calidad de datos y reportes ejecutivos consolidados en la capa Gold.
+Implementa un System Prompt riguroso y Few-Shot Learning para evitar alucinaciones,
+responder puntualmente a lo solicitado sin emitir datos no requeridos y fundamentarse
+estrictamente en los hechos curados de la Capa Gold (PostgreSQL + MinIO S3).
 """
 import logging
 from datetime import datetime, timezone
@@ -15,6 +16,49 @@ from api.app.config import api_settings
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/chat", tags=["Chat Asistente IA"])
+
+# ------------------------------------------------------------------------------
+# System Prompt y Few-Shot Learning Oficial
+# ------------------------------------------------------------------------------
+SYSTEM_PROMPT = """
+Eres el Asistente Sismológico Oficial de SismoWatch, especializado en monitoreo de eventos sísmicos y conectado en tiempo real a la capa GOLD del Data Lakehouse (PostgreSQL + MinIO S3).
+
+PRINCIPIOS OBLIGATORIOS DE COMPORTAMIENTO:
+1. PUNTUALIDAD Y CONCISIÓN EXTREMA: Responde ÚNICAMENTE lo que el usuario esté preguntando. NO agregues estadísticas no solicitadas, ni tablas de datos que no se te hayan pedido, ni introducciones redundantes. Sé breve, claro y ve directo al grano.
+2. FIDELIDAD TOTAL (CERO ALUCINACIÓN): Basa cualquier dato numérico (magnitud, conteo de sismos, profundidad, región, alertas de tsunami) ESTRICTAMENTE en los datos de la capa Gold provistos. No inventes magnitudes ni lugares. Si el usuario pregunta por un dato que no está en el contexto, indica con honestidad que no se tiene registro.
+3. TONO Y FORMATO: Responde en español neutro, cortés y profesional. Utiliza negritas para resaltar datos clave y listas solo cuando el usuario solicite múltiples elementos.
+"""
+
+FEW_SHOT_EXAMPLES = """
+EJEMPLOS DE COMPORTAMIENTO ESPERADO (FEW-SHOT):
+
+[Ejemplo 1 - Saludo simple]
+Usuario: hola como estas
+Asistente: ¡Hola! Estoy muy bien, gracias por preguntar. Soy tu Asistente Sismológico de SismoWatch. ¿Qué consulta tienes hoy sobre los eventos sísmicos o reportes de la capa Gold?
+
+[Ejemplo 2 - Conteo de hoy]
+Usuario: cuantos eventos han habido el dia de hoy hasta el momento?
+Asistente: Hasta el momento el día de hoy, se han registrado **{events_today} eventos sísmicos** en el catálogo Gold, con una magnitud máxima de **{max_mag}** y una magnitud promedio de **{avg_mag}**.
+
+[Ejemplo 3 - Sismo más fuerte]
+Usuario: cual fue el sismo mas fuerte?
+Asistente: El sismo de mayor magnitud registrado es de **M {max_mag}**, ocurrido en **{place}** ({region}) a una profundidad de **{depth} km** ({time_utc} UTC). Alerta de tsunami: No.
+
+[Ejemplo 4 - Consulta de Tsunami]
+Usuario: hay alertas de tsunami?
+Asistente: No. Actualmente no hay ninguna alerta de tsunami activa en los registros de la capa Gold.
+
+[Ejemplo 5 - Calidad de datos Pandera]
+Usuario: cual es el estado de calidad de los datos?
+Asistente: La compuerta de calidad de datos (Pandera Data Quality Gate) reporta un puntaje del **100% de conformidad** (Estado: PASSED), con 7 reglas formales aprobadas y cero registros no conformes en Gold.
+
+[Ejemplo 6 - Recomendaciones de seguridad]
+Usuario: que hacer en caso de terremoto?
+Asistente: Durante un sismo sigue estas 3 pautas prioritarias:
+1. **Agáchese, Cúbrase y Agárrese** debajo de una mesa resistente o junto a un muro estructural.
+2. Aléjese de ventanas, cristales y objetos colgantes.
+3. No use ascensores y espere a que termine el movimiento para evacuar.
+"""
 
 class ChatMessage(BaseModel):
     role: str = Field(..., description="'user' o 'assistant'")
@@ -37,7 +81,6 @@ def fetch_gold_context() -> Dict[str, Any]:
     # 1. KPIs en tiempo real (Últimas 24 horas)
     try:
         kpi = query_db_one("SELECT * FROM gold.view_realtime_kpis LIMIT 1;") or {}
-        # Normalizar claves para acceso directo
         context["kpis"] = {
             "events_24h": kpi.get("events_24h", 0),
             "max_magnitude": float(kpi.get("max_magnitude_24h") or kpi.get("max_magnitude") or 0.0),
@@ -95,13 +138,13 @@ def fetch_gold_context() -> Dict[str, Any]:
         logger.warning(f"Error consultando top sismos para chat: {exc}")
         context["top_events"] = []
 
-    # 4. Últimos 8 eventos registrados
+    # 4. Últimos 5 eventos registrados
     try:
         recent_events = query_db("""
             SELECT id, magnitude, place, region, event_time, depth_km, tsunami_alert, is_anomaly
             FROM gold.fact_earthquakes
             ORDER BY event_time DESC
-            LIMIT 8;
+            LIMIT 5;
         """)
         context["recent_events"] = recent_events or []
     except Exception as exc:
@@ -151,8 +194,8 @@ def fetch_gold_context() -> Dict[str, Any]:
 
 def generate_offline_intelligent_response(question: str, ctx: Dict[str, Any]) -> str:
     """
-    Motor analítico y conversacional determinista e inteligente cuando el LLM externo no está disponible o alcanza cuota.
-    Garantiza respuestas 100% verídicas, naturales y útiles fundamentadas en la capa Gold y MinIO.
+    Motor determinista alineado con los principios de Few-Shot y PUNTUALIDAD:
+    Responde estrictamente lo que se pide, sin verter tablas de métricas no solicitadas.
     """
     q = question.lower().strip()
     kpis = ctx.get("kpis", {})
@@ -173,207 +216,97 @@ def generate_offline_intelligent_response(question: str, ctx: Dict[str, Any]) ->
     max_mag_today = today_stats.get("max_mag_today", 0.0)
     avg_mag_today = today_stats.get("avg_mag_today", 0.0)
     tsunami_today = today_stats.get("tsunami_today", 0)
-    anom_today = today_stats.get("anomalies_today", 0)
 
-    # -------------------------------------------------------------
-    # 1. Saludos y Bienvenida Conversacional
-    # -------------------------------------------------------------
+    # 1. Saludo puntual (Sin datos de más)
     if any(k in q for k in ["hola", "como estas", "cómo estás", "buenos dias", "buenas tardes", "buenas noches", "saludos", "que tal", "quien eres"]):
-        top_text = f"el sismo más significativo hasta ahora ha sido de magnitud **{max_mag_24h}**" if max_mag_24h > 0 else "no se han presentado sismos de magnitud relevante"
         return (
-            "¡Hola! 👋 ¡Estoy muy bien, gracias por preguntar!\n\n"
-            "Soy tu **Asistente Sismológico de SismoWatch** 🌍, conectado directamente a la **Capa Gold** de nuestro Data Lakehouse (PostgreSQL + MinIO S3).\n\n"
-            f"Actualmente en el sistema:\n"
-            f"- **Hoy / Últimas 24 horas:** Se han registrado **{events_24h} eventos sísmicos** verificados.\n"
-            f"- **Intensidad Máxima:** {top_text}.\n"
-            f"- **Alertas de Tsunami:** {'⚠️ ' + str(tsunami_24h) if tsunami_24h > 0 else '✅ Ninguna'}.\n"
-            f"- **Calidad de Datos:** **100% de integridad** en la compuerta Pandera.\n\n"
-            "¿Qué te gustaría consultar hoy? Puedes preguntarme sobre:\n"
-            "1. *¿Cuántos eventos han habido el día de hoy hasta el momento?*\n"
-            "2. *¿Cuál fue el sismo más fuerte y en qué región ocurrió?*\n"
-            "3. *¿Se han detectado anomalías o enjambres sísmicos con Isolation Forest?*\n"
-            "4. *Dame un resumen del último informe ejecutivo diario.*\n"
-            "5. *¿Cuáles son las recomendaciones de prevención ante un sismo?*"
+            "¡Hola! 👋 Estoy muy bien, gracias por preguntar.\n\n"
+            "Soy tu **Asistente Sismológico de SismoWatch**, conectado directamente a la **Capa Gold**. "
+            "¿En qué puedo orientarte hoy sobre la actividad sísmica o los reportes analíticos?"
         )
 
-    # -------------------------------------------------------------
-    # 2. Conteo de Sismos de Hoy / Hasta el momento
-    # -------------------------------------------------------------
-    if any(k in q for k in ["cuantos eventos", "cuántos eventos", "cuantos sismos", "cuántos sismos", "actividad de hoy", "el dia de hoy", "el día de hoy", "hasta el momento", "hoy en dia", "hoy en día", "cuantos temblores", "cuántos temblores"]):
+    # 2. Conteo de sismos de hoy puntual
+    if any(k in q for k in ["cuantos eventos", "cuántos eventos", "cuantos sismos", "cuántos sismos", "actividad de hoy", "el dia de hoy", "el día de hoy", "hasta el momento", "cuantos temblores"]):
         active_count = events_today if events_today > 0 else events_24h
         max_active = max_mag_today if max_mag_today > 0 else max_mag_24h
         avg_active = avg_mag_today if avg_mag_today > 0 else avg_mag_24h
-        tsunami_active = tsunami_today if events_today > 0 else tsunami_24h
-        anom_active = anom_today if events_today > 0 else anom_24h
-
-        lines = [
-            f"### 📊 Balance de Actividad Sísmica de Hoy (Hasta el Momento)\n",
-            f"De acuerdo con los datos consolidados en la capa **Gold**:\n",
-            f"- **Total de eventos registrados hoy:** **{active_count} sismos** (registrados en las últimas 24 horas de monitoreo).",
-            f"- **Magnitud Máxima registrada:** **{max_active:.1f}**",
-            f"- **Magnitud Promedio:** **{avg_active:.2f}**",
-            f"- **Alertas de Tsunami activas:** **{tsunami_active}**",
-            f"- **Anomalías detectadas por Machine Learning:** **{anom_active}**\n"
-        ]
-
-        if recent_events:
-            lines.append("**Últimos sismos registrados en el catálogo:**")
-            for e in recent_events[:4]:
-                t_str = e['event_time'].strftime('%H:%M:%S UTC') if e.get('event_time') else 'Reciente'
-                lines.append(f"- 🕒 `{t_str}` | Magnitud **{e.get('magnitude')}** en *{e.get('place')}* (Prof: {e.get('depth_km')} km)")
-
-        return "\n".join(lines)
-
-    # -------------------------------------------------------------
-    # 3. Sismo más fuerte / magnitudes altas
-    # -------------------------------------------------------------
-    if any(k in q for k in ["fuerte", "mayor magnitud", "mas alto", "más alto", "máxima", "maximo", "máximo", "top sismos", "intens", "epicentro"]):
-        if not top_events:
-            return "Actualmente no hay registros de sismos suficientes en la capa Gold para calcular el evento máximo."
-        top1 = top_events[0]
-        event_time_str = top1['event_time'].strftime('%Y-%m-%d %H:%M:%S UTC') if top1.get('event_time') else 'Fecha no disponible'
-        lines = [
-            f"### 📍 Sismo de Mayor Magnitud Registrado en la Capa Gold\n",
-            f"- **Ubicación:** {top1.get('place')} ({top1.get('region', 'N/A')})",
-            f"- **Magnitud:** **{top1.get('magnitude')}** ({top1.get('magnitude_category', 'N/A')})",
-            f"- **Profundidad:** {top1.get('depth_km')} km",
-            f"- **Fecha y Hora:** {event_time_str}",
-            f"- **Alerta de Tsunami:** {'⚠️ SÍ' if top1.get('tsunami_alert') else '✅ No'}",
-            f"- **¿Es anomalía?:** {'⚠️ SÍ' if top1.get('is_anomaly') else '✅ No'}\n",
-            f"**Otros sismos significativos del catálogo:**"
-        ]
-        for e in top_events[1:4]:
-            t_str = e['event_time'].strftime('%H:%M UTC') if e.get('event_time') else ''
-            lines.append(f"- Magnitud **{e.get('magnitude')}** en *{e.get('place')}* ({t_str})")
-        return "\n".join(lines)
-
-    # -------------------------------------------------------------
-    # 4. Anomalías / Enjambres / Outliers
-    # -------------------------------------------------------------
-    if any(k in q for k in ["anomal", "enjambre", "alerta", "raro", "atipico", "atípico", "outlier", "isolation"]):
-        if anomalies:
-            lines = ["### 🚨 Alertas y Anomalías Detectadas (Isolation Forest + Haversine)\n"]
-            for a in anomalies:
-                lines.append(f"- **[{a.get('severity', 'ALERTA')}] {a.get('alert_type')}:** {a.get('description')}")
-            return "\n".join(lines)
-        else:
-            return (
-                f"### ✅ Estado de Anomalías Sísmicas\n\n"
-                f"El modelo de Machine Learning (*Isolation Forest* con agrupamiento espacio-temporal Haversine) "
-                f"reporta **{anom_24h} anomalías críticas** en la ventana de observación actual. "
-                f"Todos los sismos registrados se encuentran dentro de las distribuciones espaciales y de profundidad normales."
-            )
-
-    # -------------------------------------------------------------
-    # 5. Reporte Ejecutivo / Resumen de IA
-    # -------------------------------------------------------------
-    if any(k in q for k in ["reporte", "informe", "resumen", "ejecutivo", "hallazgo", "conclusi"]):
-        if not last_report:
-            return "No se ha generado aún un reporte ejecutivo diario en `gold.ai_reports`."
-        findings = last_report.get("key_findings") or []
-        findings_md = "\n".join([f"- {f}" for f in findings]) if findings else "- Monitoreo sísmico continuo dentro de umbrales normales."
         return (
-            f"### 📋 {last_report.get('title', 'Informe Ejecutivo Sísmico')}\n\n"
-            f"**Fecha:** {last_report.get('report_date')} | **Modelo Auditor:** `{last_report.get('model_name', 'gemini-3.8-flash')}`\n\n"
-            f"#### Resumen Ejecutivo:\n"
-            f"{last_report.get('executive_summary', 'Resumen no disponible')}\n\n"
-            f"#### Hallazgos Clave Verificados en Gold:\n"
-            f"{findings_md}"
+            f"Hasta el momento el día de hoy, se han registrado **{active_count} eventos sísmicos** en el catálogo Gold, "
+            f"con una magnitud máxima de **{max_active:.1f}** y un promedio de **{avg_active:.2f}**."
         )
 
-    # -------------------------------------------------------------
-    # 6. Calidad de datos / Pandera / Gobernanza
-    # -------------------------------------------------------------
-    if any(k in q for k in ["calidad", "pandera", "compuerta", "gobernanza", "score", "regla", "rechaz"]):
+    # 3. Alertas de tsunami puntuales
+    if any(k in q for k in ["tsunami", "alerta marina", "maremoto"]):
+        active_tsunami = tsunami_today if events_today > 0 else tsunami_24h
+        if active_tsunami > 0:
+            return f"⚠️ **Atención:** Se registran **{active_tsunami} alerta(s) de tsunami** asociadas a eventos recientes en la capa Gold."
+        return "Actualmente **no hay alertas de tsunami activas** en los registros de la capa Gold."
+
+    # 4. Sismo más fuerte puntual
+    if any(k in q for k in ["fuerte", "mayor magnitud", "mas alto", "más alto", "máxima", "maximo", "máximo", "intens", "epicentro"]):
+        if not top_events:
+            return "Actualmente no hay registros en la capa Gold para determinar el sismo de mayor magnitud."
+        top1 = top_events[0]
+        event_time_str = top1['event_time'].strftime('%Y-%m-%d %H:%M:%S UTC') if top1.get('event_time') else 'N/A'
+        tsunami_str = "Sí" if top1.get('tsunami_alert') else "No"
+        return (
+            f"El sismo de mayor magnitud registrado es de **M {top1.get('magnitude')}** ({top1.get('magnitude_category', 'N/A')}), "
+            f"ocurrido en **{top1.get('place')}** ({top1.get('region', 'N/A')}) a una profundidad de **{top1.get('depth_km')} km** "
+            f"({event_time_str}). Alerta de tsunami: **{tsunami_str}**."
+        )
+
+    # 5. Anomalías y Enjambres con ML
+    if any(k in q for k in ["anomal", "enjambre", "alerta", "atipico", "atípico", "isolation"]):
+        if anomalies:
+            top_a = anomalies[0]
+            return f"🚨 **Alerta ML ({top_a.get('severity', 'ALERTA')}):** {top_a.get('explanation')}"
+        return f"El modelo *Isolation Forest* reporta **{anom_24h} anomalías críticas**. Todos los eventos se encuentran en rangos de profundidad y frecuencia normales."
+
+    # 6. Reporte ejecutivo de IA
+    if any(k in q for k in ["reporte", "informe", "resumen", "ejecutivo", "hallazgo"]):
+        if not last_report:
+            return "No se ha generado aún un informe ejecutivo en `gold.ai_reports`."
+        return (
+            f"**{last_report.get('title', 'Informe Ejecutivo')}** ({last_report.get('report_date')}):\n\n"
+            f"{last_report.get('executive_summary', 'Resumen no disponible')}"
+        )
+
+    # 7. Calidad de datos Pandera
+    if any(k in q for k in ["calidad", "pandera", "compuerta", "reglas"]):
         score = quality.get("quality_score", 100.0)
         status_q = quality.get("status", "PASSED")
-        valid = quality.get("valid_records", events_24h)
-        rejected = quality.get("rejected_records", 0)
-        lag = quality.get("freshness_lag_seconds", 0)
         return (
-            f"### 🛡️ Compuerta de Calidad de Datos (Pandera Data Quality Gate)\n\n"
-            f"- **Estado Global:** **{status_q}**\n"
-            f"- **Puntaje de Calidad:** **{score}%**\n"
-            f"- **Registros Conformes (Silver/Gold):** {valid}\n"
-            f"- **Registros Rechazados (Sin Cuarentena):** {rejected}\n"
-            f"- **Latencia / Frescura de Datos:** {lag} segundos\n"
-            f"- **Reglas Evaluadas:** 7 reglas formales (Rango de coordenadas [-90,90], unicidad de ID, "
-            f"profundidad [-5, 1000] km, magnitud [-2, 10], no nulidad obligatoria, coherencia temporal y frescura)."
+            f"La compuerta de calidad de datos (**Pandera Data Quality Gate**) reporta un puntaje del **{score}% de conformidad** "
+            f"(Estado: **{status_q}**), validando 7 reglas sismológicas formales sin registros no conformes en Gold."
         )
 
-    # -------------------------------------------------------------
-    # 7. Regiones específicas (California, Alaska, Colombia, Chile, etc.)
-    # -------------------------------------------------------------
-    for reg in ["california", "alaska", "hawaii", "puerto rico", "colombia", "chile", "mexico", "méxico", "japon", "japón", "peru", "perú"]:
-        if reg in q:
-            matches = [e for e in (top_events + recent_events) if reg in (e.get("place", "") or "").lower() or reg in (e.get("region", "") or "").lower()]
-            if matches:
-                lines = [f"### 📍 Actividad Sísmica en {reg.capitalize()} (Capa Gold)\n"]
-                for m in matches[:5]:
-                    lines.append(f"- Magnitud **{m.get('magnitude')}** en *{m.get('place')}* (Prof: {m.get('depth_km')} km)")
-                return "\n".join(lines)
-            else:
-                return f"No se han detectado eventos recientes de magnitud relevante en la región de **{reg.capitalize()}** en la ventana de observación actual."
-
-    # -------------------------------------------------------------
-    # 8. Recomendaciones y prevención ante sismos
-    # -------------------------------------------------------------
-    if any(k in q for k in ["recomendaci", "prevenci", "seguridad", "que hacer", "qué hacer", "evacua", "terremoto", "tsunami"]):
+    # 8. Recomendaciones de prevención
+    if any(k in q for k in ["recomendaci", "prevenci", "seguridad", "que hacer", "qué hacer", "terremoto"]):
         return (
-            "### 🛡️ Recomendaciones Oficiales de Prevención Sísmica (Protocolos USGS / UNGRD)\n\n"
-            "1. **Durante el Sismo:**\n"
-            "   - **Agáchese, Cúbrase y Agárrese:** Busque refugio bajo un mueble resistente o junto a un muro estructural.\n"
-            "   - Aléjese inmediatamente de ventanas, repisas, cables de alta tensión y objetos colgantes.\n"
-            "   - Si está dentro de una edificación, no use ascensores.\n\n"
-            "2. **Después del Sismo:**\n"
-            "   - Verifique fugas de gas, daños en conexiones eléctricas y posibles grietas estructurales.\n"
-            "   - Prepárese para posibles réplicas (suelen ocurrir en las horas o días siguientes).\n"
-            "   - Mantenga sintonizada la radio de emergencias y evite saturar las líneas telefónicas.\n\n"
-            "3. **Medidas Preventivas Permanentes:**\n"
-            "   - Mantenga siempre a mano el kit de emergencia (agua potable, linterna, botiquín, alimentos no perecederos).\n"
-            "   - Defina con su familia un punto de encuentro seguro fuera de zonas de desprendimiento."
+            "Durante un sismo aplique los protocolos oficiales:\n"
+            "1. **Agáchese, Cúbrase y Agárrese** bajo un mueble firme o junto a un muro estructural.\n"
+            "2. Manténgase alejado de cristales, repisas y cables eléctricos.\n"
+            "3. No use elevadores y desaloje con calma una vez cese la sacudida."
         )
 
-    # -------------------------------------------------------------
-    # 9. Arquitectura Medallón y MinIO S3
-    # -------------------------------------------------------------
-    if any(k in q for k in ["medallon", "medallón", "minio", "s3", "lakehouse", "bronze", "silver", "gold"]):
+    # 9. Arquitectura Medallón
+    if any(k in q for k in ["medallon", "medallón", "minio", "s3", "bronze", "silver", "gold"]):
         return (
-            "### 🏛️ Arquitectura Medallón del Data Lakehouse (SismoWatch)\n\n"
-            "1. **Bronze (`sismowatch-bronze`):**\n"
-            "   - Ingesta cruda inmutable cada 5 minutos desde la API del USGS Earthquake Catalog.\n"
-            "   - Almacenamiento en PostgreSQL (`bronze.earthquakes_raw`) y MinIO S3 como GeoJSON crudo.\n\n"
-            "2. **Silver (`sismowatch-silver`):**\n"
-            "   - Limpieza, tipado estricto, desanidado de coordenadas (Lat, Lon, Depth) y sanitización anti-inyección.\n"
-            "   - Almacenamiento en PostgreSQL (`silver.earthquakes_cleaned`) y MinIO S3 en formato JSON limpio.\n\n"
-            "3. **Gold (`sismowatch-gold`):**\n"
-            "   - Datos curados y enriquecidos con Machine Learning (*Isolation Forest* para detección de enjambres y anomalías).\n"
-            "   - Compuerta de calidad Pandera obligatoria y bloqueante.\n"
-            "   - Publicación en `gold.fact_earthquakes`, `gold.daily_metrics` y reportes en MinIO S3 (`sismowatch-reports`)."
+            "La plataforma opera con Arquitectura Medallón:\n"
+            "- **Bronze (`sismowatch-bronze`):** Ingesta cruda inmutable GeoJSON de USGS.\n"
+            "- **Silver (`sismowatch-silver`):** Limpieza, tipado y validación de calidad Pandera.\n"
+            "- **Gold (`sismowatch-gold`):** Tablas de hechos con ML, métricas diarias e informes ejecutivos."
         )
 
-    # -------------------------------------------------------------
-    # 10. Conteo y estadísticas generales (Fallback con datos reales)
-    # -------------------------------------------------------------
+    # 10. Fallback puntual
     return (
-        f"### 🌐 Estado General del Data Lakehouse Sísmico (Capa Gold)\n\n"
-        f"- **Eventos en las últimas 24 horas:** {events_24h}\n"
-        f"- **Magnitud Máxima Reciente:** {max_mag_24h:.1f}\n"
-        f"- **Magnitud Promedio:** {avg_mag_24h:.2f}\n"
-        f"- **Alertas de Tsunami:** {tsunami_24h}\n"
-        f"- **Anomalías de ML:** {anom_24h}\n"
-        f"- **Calidad de Ingesta:** 100.0% (Óptima)\n\n"
-        f"Puedes preguntarme sobre:\n"
-        f"- *¿Cuántos eventos han habido el día de hoy hasta el momento?*\n"
-        f"- *¿Cuál fue el sismo más fuerte y en qué región ocurrió?*\n"
-        f"- *¿Se han detectado anomalías o enjambres sísmicos con Isolation Forest?*\n"
-        f"- *Dame un resumen del último informe ejecutivo y sus hallazgos.*\n"
-        f"- *¿Cuál es el estado de la compuerta de calidad de Pandera?*\n"
-        f"- *¿Qué recomendaciones de seguridad y prevención aplican?*"
+        f"En la capa Gold se registran **{events_24h} eventos** en las últimas 24 horas, "
+        f"con magnitud máxima de **{max_mag_24h:.1f}** y promedio de **{avg_mag_24h:.2f}**. "
+        f"¿Deseas conocer detalles sobre el sismo más fuerte, anomalías o recomendaciones de seguridad?"
     )
 
 def query_llm_with_context(question: str, history: List[ChatMessage], ctx: Dict[str, Any]) -> Optional[str]:
-    """Invoca Gemini inyectando el contexto de la capa Gold con modelo actualizado."""
+    """Invoca Gemini inyectando el System Prompt, Few-Shot y el contexto puntual de la capa Gold."""
     api_key = api_settings.GEMINI_API_KEY
     if not api_key:
         return None
@@ -382,7 +315,6 @@ def query_llm_with_context(question: str, history: List[ChatMessage], ctx: Dict[
         import google.generativeai as genai
         genai.configure(api_key=api_key)
         
-        # Usar gemini-3.8-flash o el modelo configurado
         model_name = api_settings.AI_MODEL_NAME or "gemini-3.8-flash"
         if not model_name.startswith("models/"):
             model_name = f"models/{model_name}"
@@ -391,31 +323,28 @@ def query_llm_with_context(question: str, history: List[ChatMessage], ctx: Dict[
 
         kpis = ctx.get("kpis", {})
         today_stats = ctx.get("today_stats", {})
+        top_events = ctx.get("top_events", [])
+        recent_events = ctx.get("recent_events", [])
 
-        system_prompt = f"""
-Eres el Asistente Experto de SismoWatch, especializado en sismología y arquitectura de datos Medallón (Bronze -> Silver -> Gold).
-Tienes acceso en tiempo real a los datos consolidados y verificados en la capa GOLD de PostgreSQL y MinIO S3.
+        full_prompt = f"""{SYSTEM_PROMPT}
 
-DATOS VERIFICADOS DE LA CAPA GOLD:
-- Estadísticas del Día de Hoy: {today_stats}
-- KPIs Últimas 24h: {kpis}
-- Top Sismos Fuertes: {ctx.get('top_events')}
-- Sismos Recientes: {ctx.get('recent_events')}
-- Último Reporte Ejecutivo: {ctx.get('last_report')}
-- Métricas de Calidad (Pandera): {ctx.get('quality')}
-- Anomalías Detectadas (ML): {ctx.get('anomalies')}
+{FEW_SHOT_EXAMPLES}
 
-REGLAS ESTRICTAS:
-1. Responde de forma amable, directa y natural. Si el usuario saluda ("hola", "como estas"), responde el saludo cordialmente y dale un resumen rápido de cómo está la actividad sísmica.
-2. Si el usuario pregunta cuántos eventos han habido hoy, cita la cifra exacta de {today_stats.get('events_today', kpis.get('events_24h', 0))} eventos.
-3. Responde siempre con absoluta fidelidad a los datos numéricos provistos. NO inventes magnitudes, fechas ni lugares.
-4. Si el usuario pregunta por recomendaciones de prevención, cita los protocolos estándar de sismología (USGS/UNGRD).
-5. Formatea la respuesta con Markdown claro (títulos, negritas, viñetas).
-6. Responde siempre en español.
-"""
-        prompt = f"{system_prompt}\n\nPregunta del usuario: {question}"
+CONTEXTO VERIFICADO EN TIEMPO REAL (CAPA GOLD):
+- Estadísticas de Hoy: {today_stats}
+- KPIs Últimas 24 Horas: {kpis}
+- Sismos de Mayor Magnitud: {top_events[:3]}
+- Sismos Recientes: {recent_events[:3]}
+- Alertas de Anomalía: {ctx.get('anomalies')}
+- Calidad Pandera: {ctx.get('quality')}
+
+PREGUNTA DEL USUARIO: {question}
+
+RECUERDA: Responde estrictamente lo que se te pregunta, sé puntual, no agregues datos extras innecesarios ni inventes información.
+RESPUESTA DEL ASISTENTE:"""
+
         response = model.generate_content(
-            prompt,
+            full_prompt,
             request_options={"timeout": 3.0, "retry": None}
         )
         if response and response.text:
@@ -438,7 +367,7 @@ def ask_ai_assistant(
     # Intentar responder con LLM
     llm_reply = query_llm_with_context(request.message, request.history or [], gold_context)
     
-    # Si el LLM no está disponible o falla (por ej. cuota o modelo), usar motor determinista
+    # Si el LLM no está disponible o falla, usar motor determinista con las mismas directrices de puntualidad
     reply = llm_reply or generate_offline_intelligent_response(request.message, gold_context)
 
     sources = [
@@ -457,6 +386,6 @@ def ask_ai_assistant(
         metadata={
             "user": current_user.get("username"),
             "role": current_user.get("role"),
-            "events_count": gold_context.get("kpis", {}).get("events_24h", 0)
+            "events_count": gold_context.get("today_stats", {}).get("events_today") or gold_context.get("kpis", {}).get("events_24h", 0)
         }
     )

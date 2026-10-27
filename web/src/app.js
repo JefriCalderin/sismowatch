@@ -1247,9 +1247,40 @@ function removeChatLoading(id) {
 }
 
 // ------------------------------------------------------------------------------
+// Modo Oscuro (Dark Mode)
+// ------------------------------------------------------------------------------
+function initTheme() {
+  const savedTheme = localStorage.getItem("sismowatch_theme");
+  const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  if (savedTheme === "dark" || (!savedTheme && prefersDark)) {
+    document.documentElement.classList.add("dark");
+    updateThemeIcon(true);
+  } else {
+    document.documentElement.classList.remove("dark");
+    updateThemeIcon(false);
+  }
+}
+
+function toggleDarkMode() {
+  const isDark = document.documentElement.classList.toggle("dark");
+  localStorage.setItem("sismowatch_theme", isDark ? "dark" : "light");
+  updateThemeIcon(isDark);
+  showToast(`Modo ${isDark ? "Oscuro" : "Claro"} activado`, "info");
+}
+
+function updateThemeIcon(isDark) {
+  const icon = document.getElementById("theme-icon");
+  if (icon) {
+    icon.textContent = isDark ? "☀️" : "🌙";
+  }
+}
+window.toggleDarkMode = toggleDarkMode;
+
+// ------------------------------------------------------------------------------
 // Inicialización al cargar la página
 // ------------------------------------------------------------------------------
 document.addEventListener("DOMContentLoaded", () => {
+  initTheme();
   document.getElementById("login-form").addEventListener("submit", handleLogin);
   document.getElementById("btn-logout").addEventListener("click", handleLogout);
 

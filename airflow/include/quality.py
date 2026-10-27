@@ -4,6 +4,8 @@ Implementa validaciones con Pandera y reglas analíticas de frescura, volumen, r
 Registra auditoría en gold.quality_metrics y actúa como compuerta bloqueante hacia la capa Gold.
 (Arquitectura Medallón sin tablas de cuarentena, las métricas y motivos se auditan en gold.quality_metrics).
 """
+import os
+os.environ["DISABLE_PANDERA_IMPORT_WARNING"] = "True"
 import logging
 import json
 from datetime import datetime, timezone

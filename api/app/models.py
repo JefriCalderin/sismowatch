@@ -6,8 +6,8 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
 class LoginRequest(BaseModel):
-    username: str = Field(..., example="admin")
-    password: str = Field(..., example="AdminSismo2026!")
+    username: str = Field(..., json_schema_extra={"example": "admin"})
+    password: str = Field(..., json_schema_extra={"example": "AdminSismo2026!"})
 
 class LoginResponse(BaseModel):
     access_token: str
