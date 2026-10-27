@@ -1079,7 +1079,11 @@ window.handleChatSubmit = async function(e) {
 
     const data = await res.json();
     removeChatLoading(loadingId);
-    appendChatMessage("assistant", data.reply, data.data_sources);
+    appendChatMessage("assistant", data.reply, data.data_sources, {
+      source_engine: data.source_engine,
+      engine_name: data.engine_name,
+      engine_notice: data.engine_notice
+    });
     
     // Guardar en historial
     chatHistory.push({ role: "user", content: message });
@@ -1112,7 +1116,7 @@ function formatMarkdownToHtml(text) {
   return html;
 }
 
-function appendChatMessage(role, content, sources = []) {
+function appendChatMessage(role, content, sources = [], engineInfo = null) {
   const container = document.getElementById("chat-messages");
   if (!container) return;
 
@@ -1131,6 +1135,31 @@ function appendChatMessage(role, content, sources = []) {
   } else {
     msgDiv.className = "flex items-start gap-3";
     const formatted = formatMarkdownToHtml(content);
+
+    let engineBadge = "";
+    if (engineInfo && engineInfo.source_engine) {
+      const isGemini = engineInfo.source_engine === "gemini";
+      if (isGemini) {
+        engineBadge = `
+          <div class="mb-2.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shadow-2xs">
+            <svg class="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
+            <span>Motor: <strong>Google Gemini IA</strong> (gemini-3.5-flash-lite)</span>
+          </div>
+        `;
+      } else {
+        engineBadge = `
+          <div class="mb-2.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 shadow-2xs">
+            <svg class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
+            </svg>
+            <span>Motor: <strong>Base de Datos</strong> (Capa Gold SQL Lakehouse)</span>
+          </div>
+        `;
+      }
+    }
+
     let sourcesBadge = "";
     if (sources && sources.length > 0) {
       sourcesBadge = `
@@ -1144,6 +1173,7 @@ function appendChatMessage(role, content, sources = []) {
     msgDiv.innerHTML = `
       <div class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">IA</div>
       <div class="bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl rounded-tl-none p-4 max-w-2xl text-sm text-slate-800 dark:text-slate-200 leading-relaxed shadow-2xs">
+        ${engineBadge}
         <div>${formatted}</div>
         ${sourcesBadge}
       </div>

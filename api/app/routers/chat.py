@@ -86,9 +86,12 @@ class ChatResponse(BaseModel):
     reply: str = Field(..., description="Respuesta del Asistente IA")
     data_sources: List[str] = Field(..., description="Tablas y vistas de la Capa Gold consultadas")
     timestamp: str = Field(..., description="Hora de respuesta ISO")
+    source_engine: str = Field(default="database", description="'gemini' o 'database'")
+    engine_name: str = Field(default="Base de Datos (Capa Gold SQL Lakehouse)", description="Nombre del motor")
+    engine_notice: str = Field(default="Respuesta obtenida de la Base de Datos Capa Gold", description="Aviso explicativo del origen")
     metadata: Dict[str, Any] = Field(default={}, description="Metadatos de contexto")
 
-def fetch_gold_context() -> Dict[str, Any]:
+def fetch_gold_context(question: Optional[str] = None, *args, **kwargs) -> Dict[str, Any]:
     """Extrae el contexto verificado en tiempo real desde la capa Gold de PostgreSQL."""
     context: Dict[str, Any] = {}
 
@@ -204,6 +207,74 @@ def fetch_gold_context() -> Dict[str, Any]:
         logger.warning(f"Error consultando anomalías para chat: {exc}")
         context["anomalies"] = []
 
+    # 8. Estadísticas específicas si se consulta por una región particular
+    context["regional_stats"] = None
+    if question:
+        q_lower = question.lower()
+        KNOWN_REGIONS = [
+            ("alaska", "alaska"),
+            ("indonesia", "indonesia"),
+            ("california", "california"),
+            ("nevada", "nevada"),
+            ("texas", "texas"),
+            ("hawaii", "hawaii"),
+            ("colombia", "colombia"),
+            ("chile", "chile"),
+            ("mexico", "mexico"),
+            ("méxico", "mexico"),
+            ("japon", "japon"),
+            ("japón", "japon"),
+            ("peru", "peru"),
+            ("perú", "peru"),
+            ("fiji", "fiji"),
+            ("puerto rico", "puerto rico"),
+            ("filipinas", "philippines"),
+            ("philippines", "philippines"),
+            ("italia", "italy"),
+            ("italy", "italy"),
+            ("turquia", "turkey"),
+            ("turquía", "turkey"),
+        ]
+        for reg_display, reg_filter in KNOWN_REGIONS:
+            if reg_display in q_lower:
+                try:
+                    reg_data = query_db_one("""
+                        SELECT 
+                            COUNT(*) AS total_count,
+                            COUNT(*) FILTER (WHERE event_time >= CURRENT_DATE) AS count_today,
+                            COALESCE(MAX(magnitude) FILTER (WHERE event_time >= CURRENT_DATE), 0.0) AS max_mag_today,
+                            COALESCE(ROUND(AVG(magnitude) FILTER (WHERE event_time >= CURRENT_DATE)::numeric, 2), 0.0) AS avg_mag_today,
+                            COALESCE(MAX(magnitude), 0.0) AS max_mag_total,
+                            COALESCE(ROUND(AVG(magnitude)::numeric, 2), 0.0) AS avg_mag_total,
+                            COUNT(*) FILTER (WHERE tsunami_alert = TRUE) AS tsunami_count
+                        FROM gold.fact_earthquakes
+                        WHERE LOWER(place) LIKE %s OR LOWER(region) LIKE %s;
+                    """, (f"%{reg_filter}%", f"%{reg_filter}%")) or {}
+
+                    reg_recent = query_db("""
+                        SELECT id, magnitude, place, region, event_time, depth_km, tsunami_alert, magnitude_category
+                        FROM gold.fact_earthquakes
+                        WHERE LOWER(place) LIKE %s OR LOWER(region) LIKE %s
+                        ORDER BY event_time DESC
+                        LIMIT 3;
+                    """, (f"%{reg_filter}%", f"%{reg_filter}%")) or []
+
+                    context["regional_stats"] = {
+                        "region": reg_display.capitalize(),
+                        "filter": reg_filter,
+                        "total_count": int(reg_data.get("total_count", 0)),
+                        "count_today": int(reg_data.get("count_today", 0)),
+                        "max_mag_today": float(reg_data.get("max_mag_today", 0.0)),
+                        "avg_mag_today": float(reg_data.get("avg_mag_today", 0.0)),
+                        "max_mag_total": float(reg_data.get("max_mag_total", 0.0)),
+                        "avg_mag_total": float(reg_data.get("avg_mag_total", 0.0)),
+                        "tsunami_count": int(reg_data.get("tsunami_count", 0)),
+                        "recent_events": reg_recent
+                    }
+                except Exception as exc:
+                    logger.warning(f"Error consultando estadísticas de región {reg_display}: {exc}")
+                break
+
     return context
 
 def generate_offline_intelligent_response(question: str, ctx: Dict[str, Any]) -> str:
@@ -258,7 +329,71 @@ def generate_offline_intelligent_response(question: str, ctx: Dict[str, Any]) ->
             "o ajenos a este ámbito."
         )
 
-    # 2. Conteo de sismos de hoy puntual
+    # 2. Búsqueda y Estadísticas por País o Región Específica (Prioridad máxima si se menciona región)
+    reg_stats = ctx.get("regional_stats")
+    if reg_stats:
+        reg_name = reg_stats["region"]
+        count_today = reg_stats["count_today"]
+        total_count = reg_stats["total_count"]
+        max_mag_today = reg_stats["max_mag_today"]
+        avg_mag_today = reg_stats["avg_mag_today"]
+        max_mag_total = reg_stats["max_mag_total"]
+        recent = reg_stats.get("recent_events", [])
+
+        # 2.1. Conteo de sismos en la región
+        if any(k in q for k in ["cuant", "cont", "número", "numero", "total", "registraron", "ocurrieron", "hubo"]):
+            if any(k in q for k in ["hoy", "dia de hoy", "día de hoy", "momento", "actual"]):
+                if count_today > 0:
+                    return (
+                        f"Hasta el momento el día de hoy, se han registrado **{count_today} eventos sísmicos en la región de {reg_name}** "
+                        f"en el catálogo Gold, con una magnitud máxima de **{max_mag_today:.2f}** y un promedio de **{avg_mag_today:.2f}**."
+                    )
+                else:
+                    return (
+                        f"Hasta el momento el día de hoy no se registran eventos sísmicos en la región de **{reg_name}** en la capa Gold. "
+                        f"El catálogo registra un histórico acumulado de **{total_count} eventos** en esta zona."
+                    )
+            else:
+                return (
+                    f"En los registros de la capa Gold se tienen contabilizados **{total_count} eventos sísmicos en la región de {reg_name}**, "
+                    f"con una magnitud máxima histórica de **{max_mag_total:.2f}**."
+                )
+
+        # 2.2. Sismo más fuerte en la región
+        if any(k in q for k in ["fuerte", "mayor magnitud", "mas alto", "más alto", "máxima", "maximo", "máximo", "intens"]):
+            try:
+                strongest_reg = query_db_one("""
+                    SELECT id, magnitude, place, region, event_time, depth_km, tsunami_alert
+                    FROM gold.fact_earthquakes
+                    WHERE LOWER(place) LIKE %s OR LOWER(region) LIKE %s
+                    ORDER BY magnitude DESC
+                    LIMIT 1;
+                """, (f"%{reg_stats['filter']}%", f"%{reg_stats['filter']}%"))
+                if strongest_reg:
+                    t_str = strongest_reg['event_time'].strftime('%Y-%m-%d %H:%M UTC') if strongest_reg.get('event_time') else 'N/A'
+                    return (
+                        f"El sismo más fuerte registrado en la región de **{reg_name}** es de **M {float(strongest_reg.get('magnitude') or 0):.2f}**, "
+                        f"ocurrido en **{strongest_reg.get('place')}** a una profundidad de **{round(float(strongest_reg.get('depth_km') or 0), 1)} km** ({t_str})."
+                    )
+            except Exception:
+                pass
+
+        # 2.3. Sismo más reciente en la región (o consulta general de la región)
+        if recent:
+            m = recent[0]
+            t_str = m['event_time'].strftime('%Y-%m-%d %H:%M UTC') if m.get('event_time') else 'Reciente'
+            mag_val = round(float(m.get("magnitude") or 0.0), 2)
+            depth_val = round(float(m.get("depth_km") or 0.0), 1)
+            tsunami_str = "Sí" if m.get('tsunami_alert') else "No"
+            return (
+                f"El sismo más reciente registrado en la región de **{reg_name}** es de **M {mag_val:.2f}**, "
+                f"ocurrido en **{m.get('place')}** a una profundidad de **{depth_val:.1f} km** el **{t_str}**. "
+                f"Alerta de tsunami: **{tsunami_str}**."
+            )
+        else:
+            return f"No se registran eventos sísmicos recientes en la región de **{reg_name}** en la ventana de monitoreo actual de la capa Gold."
+
+    # 3. Conteo de sismos de hoy global (cuando no se especifica región)
     if any(k in q for k in ["cuantos eventos", "cuántos eventos", "cuantos sismos", "cuántos sismos", "actividad de hoy", "el dia de hoy", "el día de hoy", "hasta el momento", "cuantos temblores"]):
         active_count = events_today if events_today > 0 else events_24h
         max_active = max_mag_today if max_mag_today > 0 else max_mag_24h
@@ -268,43 +403,14 @@ def generate_offline_intelligent_response(question: str, ctx: Dict[str, Any]) ->
             f"con una magnitud máxima de **{max_active:.1f}** y un promedio de **{avg_active:.2f}**."
         )
 
-    # 2.5. Búsqueda por país o región específica (Prioridad sobre búsqueda global para evitar respuestas genéricas)
-    for reg in ["indonesia", "alaska", "california", "nevada", "texas", "hawaii", "colombia", "chile", "mexico", "méxico", "japon", "japón", "peru", "perú", "fiji", "puerto rico"]:
-        if reg in q:
-            reg_clean = "mexico" if reg in ["mexico", "méxico"] else ("japon" if reg in ["japon", "japón"] else ("peru" if reg in ["peru", "perú"] else reg))
-            try:
-                matches = query_db("""
-                    SELECT id, magnitude, place, region, event_time, depth_km, tsunami_alert, magnitude_category
-                    FROM gold.fact_earthquakes
-                    WHERE LOWER(place) LIKE %s OR LOWER(region) LIKE %s
-                    ORDER BY event_time DESC
-                    LIMIT 5;
-                """, (f"%{reg_clean}%", f"%{reg_clean}%")) or []
-            except Exception:
-                matches = [e for e in (recent_events + top_events) if reg_clean in (e.get("place", "") or "").lower() or reg_clean in (e.get("region", "") or "").lower()]
-
-            if matches:
-                m = matches[0]
-                t_str = m['event_time'].strftime('%Y-%m-%d %H:%M UTC') if m.get('event_time') else 'Reciente'
-                mag_val = round(float(m.get("magnitude") or 0.0), 2)
-                depth_val = round(float(m.get("depth_km") or 0.0), 1)
-                tsunami_str = "Sí" if m.get('tsunami_alert') else "No"
-                return (
-                    f"El sismo más reciente registrado en la región de **{reg.capitalize()}** es de **M {mag_val:.2f}**, "
-                    f"ocurrido en **{m.get('place')}** a una profundidad de **{depth_val:.1f} km** el **{t_str}**. "
-                    f"Alerta de tsunami: **{tsunami_str}**."
-                )
-            else:
-                return f"No se registran eventos sísmicos recientes en la región de **{reg.capitalize()}** en la ventana de monitoreo actual de la capa Gold."
-
-    # 3. Alertas de tsunami puntuales (Sin emojis)
+    # 4. Alertas de tsunami puntuales (Sin emojis)
     if any(k in q for k in ["tsunami", "alerta marina", "maremoto"]):
         active_tsunami = tsunami_today if events_today > 0 else tsunami_24h
         if active_tsunami > 0:
             return f"**Atención:** Se registran **{active_tsunami} alerta(s) de tsunami** asociadas a eventos recientes en la capa Gold."
         return "Actualmente **no hay alertas de tsunami activas** en los registros de la capa Gold."
 
-    # 3.5. Último sismo registrado / Más reciente / Últimos minutos (Global)
+    # 5. Último sismo registrado / Más reciente / Últimos minutos (Global)
     if any(k in q for k in ["ultimo sismo", "último sismo", "mas reciente", "más reciente", "ultimo temblor", "último temblor", "ultimo evento", "último evento", "ultimos minutos", "últimos minutos", "ultimos 5 minutos", "últimos 5 minutos", "hace poco", "recien", "recién"]):
         if not recent_events:
             return "Actualmente no hay registros de sismos recientes en la capa Gold."
@@ -319,7 +425,7 @@ def generate_offline_intelligent_response(question: str, ctx: Dict[str, Any]) ->
             f"el **{event_time_str}**. Alerta de tsunami: **{tsunami_str}**."
         )
 
-    # 4. Sismo más fuerte puntual
+    # 6. Sismo más fuerte global puntual
     if any(k in q for k in ["fuerte", "mayor magnitud", "mas alto", "más alto", "máxima", "maximo", "máximo", "intens", "epicentro"]):
         if not top_events:
             return "Actualmente no hay registros en la capa Gold para determinar el sismo de mayor magnitud."
@@ -334,14 +440,14 @@ def generate_offline_intelligent_response(question: str, ctx: Dict[str, Any]) ->
             f"({event_time_str}). Alerta de tsunami: **{tsunami_str}**."
         )
 
-    # 5. Anomalías y Enjambres con ML (Sin emojis)
+    # 7. Anomalías y Enjambres con ML (Sin emojis)
     if any(k in q for k in ["anomal", "enjambre", "alerta", "atipico", "atípico", "isolation"]):
         if anomalies:
             top_a = anomalies[0]
             return f"**Alerta ML ({top_a.get('severity', 'ALERTA')}):** {top_a.get('explanation')}"
         return f"El modelo *Isolation Forest* reporta **{anom_24h} anomalías críticas**. Todos los eventos se encuentran en rangos de profundidad y frecuencia normales."
 
-    # 6. Reporte ejecutivo de IA
+    # 8. Reporte ejecutivo de IA
     if any(k in q for k in ["reporte", "informe", "resumen", "ejecutivo", "hallazgo"]):
         if not last_report:
             return "No se ha generado aún un informe ejecutivo en `gold.ai_reports`."
@@ -350,7 +456,7 @@ def generate_offline_intelligent_response(question: str, ctx: Dict[str, Any]) ->
             f"{last_report.get('executive_summary', 'Resumen no disponible')}"
         )
 
-    # 7. Calidad de datos Pandera
+    # 9. Calidad de datos Pandera
     if any(k in q for k in ["calidad", "pandera", "compuerta", "reglas"]):
         score = quality.get("quality_score", 100.0)
         status_q = quality.get("status", "PASSED")
@@ -359,7 +465,7 @@ def generate_offline_intelligent_response(question: str, ctx: Dict[str, Any]) ->
             f"(Estado: **{status_q}**), validando 7 reglas sismológicas formales sin registros no conformes en Gold."
         )
 
-    # 8. Recomendaciones de prevención
+    # 10. Recomendaciones de prevención
     if any(k in q for k in ["recomendaci", "prevenci", "seguridad", "que hacer", "qué hacer", "terremoto"]):
         return (
             "Durante un sismo aplique los protocolos oficiales:\n"
@@ -368,7 +474,7 @@ def generate_offline_intelligent_response(question: str, ctx: Dict[str, Any]) ->
             "3. No use elevadores y desaloje con calma una vez cese la sacudida."
         )
 
-    # 9. Arquitectura Medallón
+    # 11. Arquitectura Medallón
     if any(k in q for k in ["medallon", "medallón", "minio", "s3", "bronze", "silver", "gold"]):
         return (
             "La plataforma opera con Arquitectura Medallón:\n"
@@ -377,7 +483,7 @@ def generate_offline_intelligent_response(question: str, ctx: Dict[str, Any]) ->
             "- **Gold (`sismowatch-gold`):** Tablas de hechos con ML, métricas diarias e informes ejecutivos."
         )
 
-    # 10. Fallback puntual
+    # 12. Fallback puntual
     return (
         f"En la capa Gold se registran **{events_24h} eventos** en las últimas 24 horas, "
         f"con magnitud máxima de **{max_mag_24h:.1f}** y promedio de **{avg_mag_24h:.2f}**. "
@@ -395,7 +501,6 @@ def query_llm_with_context(question: str, history: List[ChatMessage], ctx: Dict[
         genai.configure(api_key=api_key)
 
         model_name = api_settings.AI_MODEL_NAME or "gemini-3.5-flash-lite"
-
         if not model_name.startswith("models/"):
             model_name = f"models/{model_name}"
 
@@ -405,14 +510,22 @@ def query_llm_with_context(question: str, history: List[ChatMessage], ctx: Dict[
         today_stats = ctx.get("today_stats", {})
         top_events = ctx.get("top_events", [])
         recent_events = ctx.get("recent_events", [])
+        reg_stats = ctx.get("regional_stats")
+
+        reg_section = ""
+        if reg_stats:
+            reg_section = f"\n- ESTADÍSTICAS ESPECÍFICAS DE LA REGIÓN CONSULTADA ({reg_stats['region']}):\n" \
+                          f"  Total eventos en catálogo: {reg_stats['total_count']}, Registrados hoy: {reg_stats['count_today']}, " \
+                          f"  Magnitud máxima hoy: {reg_stats['max_mag_today']}, Magnitud máxima histórica: {reg_stats['max_mag_total']}, " \
+                          f"  Eventos recientes en {reg_stats['region']}: {reg_stats.get('recent_events')}\n"
 
         full_prompt = f"""{SYSTEM_PROMPT}
 
 {FEW_SHOT_EXAMPLES}
 
 CONTEXTO VERIFICADO EN TIEMPO REAL (CAPA GOLD):
-- Estadísticas de Hoy: {today_stats}
-- KPIs Últimas 24 Horas: {kpis}
+- Estadísticas Generales de Hoy: {today_stats}
+- KPIs Últimas 24 Horas: {kpis}{reg_section}
 - Sismos de Mayor Magnitud: {top_events[:3]}
 - Sismos Recientes: {recent_events[:3]}
 - Alertas de Anomalía: {ctx.get('anomalies')}
@@ -420,12 +533,12 @@ CONTEXTO VERIFICADO EN TIEMPO REAL (CAPA GOLD):
 
 PREGUNTA DEL USUARIO: {question}
 
-RECUERDA: Responde estrictamente lo que se te pregunta, sé puntual, no agregues datos extras innecesarios ni inventes información.
+RECUERDA: Responde estrictamente lo que se te pregunta, sé puntual, no agregues datos extras innecesarios ni inventes información. Si te preguntan por una región específica (ej. Alaska, Indonesia), utiliza de forma preferente y estricta los datos de esa región.
 RESPUESTA DEL ASISTENTE:"""
 
         response = model.generate_content(
             full_prompt,
-            request_options={"timeout": 3.0, "retry": None}
+            request_options={"timeout": 15.0}
         )
         if response and response.text:
             return response.text.strip()
@@ -441,14 +554,27 @@ def ask_ai_assistant(
     """
     Endpoint para chatear con el Asistente IA sobre los datos de la Capa Gold.
     Disponible para roles 'viewer' y 'admin'.
+    Informa explícitamente el origen de la respuesta (Google Gemini IA o Base de Datos SQL).
     """
-    gold_context = fetch_gold_context()
+    try:
+        gold_context = fetch_gold_context(request.message)
+    except TypeError:
+        gold_context = fetch_gold_context()
 
-    # Intentar responder con LLM
+    # 1. Intentar responder con LLM (Gemini)
     llm_reply = query_llm_with_context(request.message, request.history or [], gold_context)
     
-    # Si el LLM no está disponible o falla, usar motor determinista con las mismas directrices de puntualidad
-    reply = llm_reply or generate_offline_intelligent_response(request.message, gold_context)
+    if llm_reply:
+        reply = llm_reply
+        source_engine = "gemini"
+        engine_name = "Google Gemini IA (gemini-3.5-flash-lite)"
+        engine_notice = "Respuesta generada por Google Gemini IA sintetizando datos analíticos de la Capa Gold"
+    else:
+        # 2. Si el LLM no está disponible, timeout o error, recurrir a la base de datos (Motor SQL Capa Gold)
+        reply = generate_offline_intelligent_response(request.message, gold_context)
+        source_engine = "database"
+        engine_name = "Base de Datos (Capa Gold SQL Lakehouse)"
+        engine_notice = "Respuesta consultada directamente de la Base de Datos (Motor Determinista SQL Capa Gold)"
 
     sources = [
         "gold.fact_earthquakes",
@@ -463,9 +589,14 @@ def ask_ai_assistant(
         reply=reply,
         data_sources=sources,
         timestamp=datetime.now(timezone.utc).isoformat(),
+        source_engine=source_engine,
+        engine_name=engine_name,
+        engine_notice=engine_notice,
         metadata={
             "user": current_user.get("username"),
             "role": current_user.get("role"),
+            "source_engine": source_engine,
+            "engine_name": engine_name,
             "events_count": gold_context.get("today_stats", {}).get("events_today") or gold_context.get("kpis", {}).get("events_24h", 0)
         }
     )
