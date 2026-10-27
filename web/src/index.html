@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SismoWatch - Plataforma Global de Monitoreo Sísmico</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans min-h-screen flex flex-col">
+
+  <!-- Header Superior -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-white font-black text-xl shadow-md">
+          S
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg font-black tracking-tight text-slate-900">SismoWatch</h1>
+            <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+              Arquitectura Medallón
+            </span>
+          </div>
+          <p class="text-xs text-slate-500">SuperApp Global Seismic Intelligence</p>
+        </div>
+      </div>
+
+      <!-- Estado en Vivo y Usuario -->
+      <div class="flex items-center gap-4">
+        <div class="hidden sm:flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-full border border-slate-200">
+          <span id="live-indicator" class="live-indicator"></span>
+          <span id="live-status-text" class="text-xs font-bold text-emerald-600">EN VIVO</span>
+          <span class="text-slate-300">|</span>
+          <span id="last-update-time" class="text-xs text-slate-500">Conectando...</span>
+        </div>
+
+        <div id="auth-section" class="hidden flex items-center gap-3">
+          <div id="user-badge" class="text-sm"></div>
+          <button id="btn-logout" class="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition border border-slate-200">
+            Cerrar Sesión
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navegación por Pestañas -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-6 border-t border-slate-100">
+      <button id="nav-btn-dashboard" onclick="switchTab('dashboard')" class="px-3 py-2 text-sm font-bold text-indigo-600 border-b-2 border-indigo-600">
+        Dashboard Principal
+      </button>
+      <button id="nav-btn-reports" onclick="switchTab('reports')" class="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900">
+        Informes de IA
+      </button>
+      <button id="nav-btn-pipeline" onclick="switchTab('pipeline')" class="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900">
+        Pipeline & Calidad
+      </button>
+    </div>
+  </header>
+
+  <!-- Banner de Último Evento Crítico -->
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4 w-full">
+    <div id="live-event-banner"></div>
+  </div>
+
+  <!-- Contenedor Principal -->
+  <main id="main-content" class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- SECCIÓN 1: DASHBOARD -->
+    <section id="tab-section-dashboard" class="space-y-6">
+      
+      <!-- Barra de Acciones de Administrador -->
+      <div class="admin-only hidden bg-gradient-to-r from-indigo-900 to-slate-900 text-white rounded-xl p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <span class="p-2 bg-indigo-800 rounded-lg text-lg">⚡</span>
+          <div>
+            <h4 class="text-sm font-bold">Panel de Control de Administrador</h4>
+            <p class="text-xs text-indigo-200">Acciones privilegiadas protegidas por RBAC</p>
+          </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="triggerBackfill()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition shadow-xs">
+            Lanzar Backfill Histórico
+          </button>
+          <button onclick="triggerRegenerateReport()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition shadow-xs">
+            Regenerar Reporte IA
+          </button>
+          <a href="/api/reports/export?format=csv" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg transition border border-slate-700">
+            Exportar CSV
+          </a>
+        </div>
+      </div>
+
+      <!-- Tarjetas de KPIs (6 Métricas Principales) -->
+      <div class="grid grid-cols-2 lg:grid-cols-6 gap-4">
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs transition-card">
+          <span class="text-xs font-medium text-slate-500">Eventos (24h)</span>
+          <div id="kpi-events-24h" class="text-2xl font-black text-slate-900 mt-1">--</div>
+          <span class="text-[10px] text-slate-400">Total global</span>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs transition-card">
+          <span class="text-xs font-medium text-slate-500">Mag Máxima</span>
+          <div id="kpi-max-mag" class="text-2xl font-black text-red-600 mt-1">--</div>
+          <span class="text-[10px] text-slate-400">Pico Richter</span>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs transition-card">
+          <span class="text-xs font-medium text-slate-500">Mag Promedio</span>
+          <div id="kpi-avg-mag" class="text-2xl font-black text-indigo-600 mt-1">--</div>
+          <span class="text-[10px] text-slate-400">Media móvil</span>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs transition-card">
+          <span class="text-xs font-medium text-slate-500">Alertas Tsunami</span>
+          <div id="kpi-tsunami" class="text-2xl font-black text-amber-600 mt-1">--</div>
+          <span class="text-[10px] text-slate-400">Eventos marítimos</span>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs transition-card">
+          <span class="text-xs font-medium text-slate-500">Score Calidad</span>
+          <div id="kpi-quality" class="text-2xl font-black text-emerald-600 mt-1">--</div>
+          <span class="text-[10px] text-slate-400">Compuerta Pandera</span>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs transition-card">
+          <span class="text-xs font-medium text-slate-500">Anomalías ML</span>
+          <div id="kpi-anomalies" class="text-2xl font-black text-purple-600 mt-1">--</div>
+          <span class="text-[10px] text-slate-400">Enjambres / Outliers</span>
+        </div>
+      </div>
+
+      <!-- Mapa Interactivo Leaflet -->
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Mapa Global de Sismicidad</h3>
+            <p class="text-xs text-slate-500">Epicentros geolocalizados en tiempo casi real clasificados por magnitud</p>
+          </div>
+          <div class="flex items-center gap-2 text-xs">
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> &lt; 4.0</span>
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> 4.0 - 5.4</span>
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-orange-500"></span> 5.5 - 6.9</span>
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-red-600"></span> &ge; 7.0</span>
+          </div>
+        </div>
+        <div id="map"></div>
+      </div>
+
+      <!-- Gráficos Analíticos -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Serie Temporal -->
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs lg:col-span-2">
+          <h3 class="text-sm font-bold text-slate-800 mb-1">Evolución Temporal de la Actividad</h3>
+          <p class="text-xs text-slate-500 mb-4">Frecuencia horaria y magnitud promedio de los últimos 7 días</p>
+          <div class="h-64">
+            <canvas id="chart-timeseries"></canvas>
+          </div>
+        </div>
+        <!-- Distribución por Magnitud -->
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs">
+          <h3 class="text-sm font-bold text-slate-800 mb-1">Distribución de Magnitud</h3>
+          <p class="text-xs text-slate-500 mb-4">Proporción según categorías Richter</p>
+          <div class="h-64 flex items-center justify-center">
+            <canvas id="chart-distribution"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Regiones con Mayor Actividad -->
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs">
+        <h3 class="text-sm font-bold text-slate-800 mb-1">Top Regiones con Mayor Frecuencia Sísmica</h3>
+        <p class="text-xs text-slate-500 mb-4">Puntos calientes de liberación de energía</p>
+        <div class="h-56">
+          <canvas id="chart-regions"></canvas>
+        </div>
+      </div>
+
+      <!-- Filtros y Tabla Paginada de Eventos -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+        <div class="p-5 border-b border-slate-100">
+          <h3 class="text-base font-bold text-slate-900 mb-3">Catálogo Curado de Eventos Sísmicos (Capa Gold)</h3>
+          <!-- Formulario de Filtros -->
+          <form id="filter-form" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Magnitud Mínima</label>
+              <input type="number" id="filter-min-mag" step="0.1" placeholder="Ej: 3.5" class="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Región / Ubicación</label>
+              <input type="text" id="filter-region" placeholder="Ej: California, Chile..." class="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Desde</label>
+              <input type="date" id="filter-start-date" class="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Hasta</label>
+              <input type="date" id="filter-end-date" class="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div class="flex items-end gap-2">
+              <button type="submit" class="flex-1 py-2 px-3 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition">
+                Filtrar
+              </button>
+              <button type="button" id="btn-reset-filters" class="py-2 px-3 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition">
+                Limpiar
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Tabla -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                <th class="py-3 px-4">ID Evento</th>
+                <th class="py-3 px-4">Magnitud</th>
+                <th class="py-3 px-4">Ubicación Sanitizada</th>
+                <th class="py-3 px-4">Región</th>
+                <th class="py-3 px-4">Profundidad</th>
+                <th class="py-3 px-4">Fecha / Hora (UTC)</th>
+              </tr>
+            </thead>
+            <tbody id="events-table-body" class="divide-y divide-slate-100">
+              <!-- Cargado dinámicamente -->
+            </tbody>
+          </table>
+          <div id="events-empty" class="hidden text-center py-10 text-slate-400 text-sm">
+            No se encontraron eventos sísmicos con los criterios especificados.
+          </div>
+        </div>
+
+        <!-- Paginación -->
+        <div class="p-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 bg-slate-50">
+          <span id="page-info">Página 1</span>
+          <div class="flex items-center gap-2">
+            <button id="btn-prev-page" class="px-3 py-1.5 border border-slate-200 rounded-lg bg-white hover:bg-slate-100 font-semibold disabled:opacity-40">
+              Anterior
+            </button>
+            <button id="btn-next-page" class="px-3 py-1.5 border border-slate-200 rounded-lg bg-white hover:bg-slate-100 font-semibold disabled:opacity-40">
+              Siguiente
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECCIÓN 2: INFORMES DE IA -->
+    <section id="tab-section-reports" class="hidden space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-2xs">
+        <div>
+          <h2 class="text-xl font-bold text-slate-900">Informes Ejecutivos Diarios con IA</h2>
+          <p class="text-xs text-slate-500 mt-1">Generados automáticamente por Apache Airflow con auditoría de tokens, latencia y verificación matemática estricta</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="loadReportsView()" class="px-3 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg">
+            Refrescar
+          </button>
+          <a href="/api/reports/export?format=html" target="_blank" class="px-3 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg">
+            Descargar Último Reporte (HTML)
+          </a>
+        </div>
+      </div>
+      <div id="reports-container" class="space-y-4">
+        <!-- Renderizado dinámicamente -->
+      </div>
+    </section>
+
+    <!-- SECCIÓN 3: PIPELINE Y CALIDAD -->
+    <section id="tab-section-pipeline" class="hidden space-y-6">
+      <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs">
+        <h2 class="text-xl font-bold text-slate-900">Estado de Orquestación y Gobernanza</h2>
+        <p class="text-xs text-slate-500 mt-1">Monitoreo del flujo de datos desde USGS -> Airflow -> Spark -> Medallón -> OpenMetadata</p>
+      </div>
+      <div id="pipeline-status-container">
+        <!-- Renderizado dinámicamente -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Modal de Login -->
+  <div id="login-modal" class="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-8 shadow-2xl border border-slate-100 animate-in fade-in zoom-in duration-200">
+      <div class="text-center mb-6">
+        <div class="w-12 h-12 bg-indigo-600 text-white font-black text-2xl rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-indigo-200">
+          S
+        </div>
+        <h2 class="text-2xl font-black text-slate-900">SismoWatch Access</h2>
+        <p class="text-xs text-slate-500 mt-1">Plataforma de Monitoreo Sísmico Global en Tiempo Real</p>
+      </div>
+
+      <div id="login-error" class="hidden mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg font-medium"></div>
+
+      <form id="login-form" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Usuario</label>
+          <input type="text" id="login-username" required placeholder="admin o viewer" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Contraseña</label>
+          <input type="password" id="login-password" required placeholder="••••••••••••" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <button type="submit" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl transition shadow-md shadow-indigo-100">
+          Ingresar al Sistema
+        </button>
+      </form>
+
+      <div class="mt-6 pt-5 border-t border-slate-100 text-xs text-slate-500">
+        <span class="font-bold text-slate-700">Credenciales de prueba:</span>
+        <div class="mt-1 flex justify-between bg-slate-50 p-2 rounded border border-slate-200">
+          <span><b>Admin:</b> admin / AdminSismo2026!</span>
+          <span><b>Viewer:</b> viewer / ViewerSismo2026!</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="hidden fixed bottom-5 right-5 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium transition-all duration-300">
+    <span id="toast-message"></span>
+  </div>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500 mt-auto">
+    <div class="max-w-7xl mx-auto px-4">
+      SismoWatch &copy; 2026 SuperApp Data Platform &bull; Arquitectura Medallón (Bronze &rarr; Silver &rarr; Gold) &bull; OpenMetadata Lineage
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
