@@ -144,3 +144,32 @@ flowchart TD
 2. **Delta Lake / Apache Iceberg en Object Storage (S3 / GCS):** En lugar de PostgreSQL monolítico, la arquitectura Medallón residiría en un Data Lakehouse distribuido con soporte para transacciones ACID, viajes en el tiempo (Time Travel) y compactación automática.
 3. **OpenMetadata Standalone:** Despliegue de OpenMetadata en Kubernetes conectado al metastore corporativo, sincronizando linaje automático mediante escuchadores de eventos en Airflow (`OpenMetadataLineageHook`).
 4. **Alta Disponibilidad Multi-Región:** Replicación activa-pasiva de la base de datos y clústeres de Airflow en múltiples zonas de disponibilidad con balanceo de carga.
+
+---
+
+## 6. Integraciones Clave: MinIO S3, Asistente IA y Separación de Actividad
+
+### 6.1 MinIO Object Storage (Data Lakehouse S3)
+A petición de la cátedra de analítica, se integró **MinIO** (puertos `9000` API y `9001` Consola Web) como repositorio S3-compatible desacoplado para almacenar las copias estructuradas del lago de datos:
+- `sismowatch-bronze`: Archivos GeoJSON crudos inmutables organizados por partición temporal (`year=YYYY/month=MM/day=DD/`).
+- `sismowatch-silver`: Datasets JSON limpios, deduplicados y tipados tras la compuerta de sanitización.
+- `sismowatch-gold`: Tablas de hechos curadas (`facts/`) y métricas diarias consolidadas (`metrics/`).
+- `sismowatch-reports`: Informes ejecutivos diarios generados por IA en doble formato (HTML listo para impresión y JSON estructurado).
+- `sismowatch-backups`: Snapshots periódicos para disaster recovery.
+
+### 6.2 Asistente Conversacional Inteligente con Acceso a la Capa Gold
+El Asistente Sismológico de IA está conectado a las vistas analíticas y tablas de hechos de la capa Gold (`gold.fact_earthquakes`, `gold.view_realtime_kpis`, `gold.ai_reports`):
+- Soporta consultas en lenguaje natural: saludos cordiales, balance de eventos de hoy, sismo de mayor magnitud, detección de anomalías espaciotemporales (*Isolation Forest*), compuerta de calidad Pandera y recomendaciones preventivas oficiales (USGS/UNGRD).
+- Incorpora un **controlador de anti-alucinación**: todas las cifras citadas corresponden de forma unívoca a los datos calculados en la base de datos.
+- Modelo principal: `gemini-3.8-flash` con fallback instantáneo a motor analítico determinista si se alcanza la cuota de la API pública.
+
+### 6.3 Separación Estructural de la Interfaz Web: Tiempo Real vs Histórico
+Para evitar cruces o discordancias entre los datos del día y consultas retrospectivas, la interfaz de usuario se divide en dos bloques independientes:
+1. **Bloque Superior: Actividad Sísmica de Hoy (Tiempo Real / Últimas 24 Horas):**
+   - KPIs del día en vivo (eventos 24h, magnitud máxima, magnitud promedio, alertas tsunami, score Pandera y anomalías).
+   - Mapa interactivo de epicentros centrado en los sismos del día.
+   - Tabla en vivo de eventos registrados hoy con actualización automática cada 30 segundos (vía Server-Sent Events - SSE).
+2. **Bloque Inferior: Historial y Consultas de Días Anteriores (Catálogo USGS & Capa Gold):**
+   - Explorador retrospectivo con filtros dinámicos: día específico (24h), rango personalizado de fechas, mes completo, año completo o últimos N días.
+   - Filtro de magnitud mínima configurable (default 2.5) y selector de ordenamiento (por fecha o magnitud).
+   - Tabla de resultados históricos dedicada con paginación independiente y contador exacto de eventos encontrados en el período.
