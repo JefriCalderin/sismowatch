@@ -11,7 +11,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-sismo_root}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-SismoSecureRoot2026!}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_EXTERNAL_PORT:-5433}:5432"
     volumes:
       - ./db/init:/docker-entrypoint-initdb.d:ro
       - postgres-data:/var/lib/postgresql/data
@@ -27,6 +27,7 @@ services:
   # 2. Apache Airflow - Inicializador de Base de Datos y Creación de Admin
   # ==============================================================================
   airflow-init:
+    image: sismowatch-airflow:latest
     build:
       context: .
       dockerfile: airflow/Dockerfile
@@ -63,9 +64,7 @@ services:
   # 3. Apache Airflow - Webserver (Puerto 8080)
   # ==============================================================================
   airflow-webserver:
-    build:
-      context: .
-      dockerfile: airflow/Dockerfile
+    image: sismowatch-airflow:latest
     container_name: sismowatch-airflow-webserver
     restart: always
     depends_on:
@@ -114,9 +113,7 @@ services:
   # 4. Apache Airflow - Scheduler
   # ==============================================================================
   airflow-scheduler:
-    build:
-      context: .
-      dockerfile: airflow/Dockerfile
+    image: sismowatch-airflow:latest
     container_name: sismowatch-airflow-scheduler
     restart: always
     depends_on:

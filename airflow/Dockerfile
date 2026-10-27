@@ -9,4 +9,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 USER airflow
 COPY airflow/requirements.txt /requirements.txt
-RUN pip install --no-cache-dir -r /requirements.txt
+RUN pip install --no-cache-dir -r /requirements.txt && \
+    ln -s /opt/airflow/include /home/airflow/.local/lib/python3.11/site-packages/airflow/include
