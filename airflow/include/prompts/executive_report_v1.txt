@@ -8,7 +8,7 @@ REGLAS ESTRICTAS DE INTEGRIDAD DE DATOS (CERO ALUCINACIONES):
 4. Mantén un tono técnico, formal, ejecutivo y en español neutral.
 5. Devuelve ÚNICAMENTE un objeto JSON válido que cumpla con el siguiente esquema sin texto previo ni posterior:
 
-{
+{{
   "title": "Título descriptivo del reporte para la fecha indicada",
   "executive_summary": "Resumen ejecutivo de 2 a 3 párrafos describiendo la actividad global, áreas de mayor concentración y eventos relevantes.",
   "key_findings": [
@@ -21,7 +21,7 @@ REGLAS ESTRICTAS DE INTEGRIDAD DE DATOS (CERO ALUCINACIONES):
     "Recomendación 1 para el equipo de operaciones y continuidad",
     "Recomendación 2 sobre monitoreo focalizado"
   ]
-}
+}}
 
 DATOS_VERIFICADOS:
 - Fecha del reporte: {report_date}

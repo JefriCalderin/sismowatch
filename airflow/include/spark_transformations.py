@@ -95,6 +95,8 @@ def process_bronze_to_silver() -> int:
         return 0
 
     df = pd.DataFrame(rows)
+    df.columns = [c.lower() for c in df.columns]
+
     # Limpieza y tipado
     df["magnitude"] = pd.to_numeric(df["properties_mag"], errors="coerce").fillna(0.0)
     df["longitude"] = pd.to_numeric(df["longitude"], errors="coerce").fillna(0.0)
@@ -111,7 +113,7 @@ def process_bronze_to_silver() -> int:
     df["tsunami_alert"] = df["properties_tsunami"].fillna(0).astype(int) > 0
     df["significance"] = pd.to_numeric(df["properties_sig"], errors="coerce").fillna(0).astype(int)
     df["status"] = df["properties_status"].fillna("automatic").astype(str)
-    df["magnitude_type"] = df["properties_magType"].fillna("unknown").astype(str)
+    df["magnitude_type"] = df["properties_magtype"].fillna("unknown").astype(str)
     df["event_type"] = df["properties_type"].fillna("earthquake").astype(str)
     df["url"] = df["properties_url"].fillna("").astype(str)
 
