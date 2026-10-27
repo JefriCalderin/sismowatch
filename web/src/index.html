@@ -187,48 +187,168 @@
       </div>
 
       <!-- Filtros y Tabla Paginada de Eventos -->
+      <!-- Seguimiento e Historial de Eventos Sísmicos (USGS Oficial & Capa Gold) -->
       <div class="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
-        <div class="p-5 border-b border-slate-100">
-          <h3 class="text-base font-bold text-slate-900 mb-3">Catálogo Curado de Eventos Sísmicos (Capa Gold)</h3>
-          <!-- Formulario de Filtros -->
-          <form id="filter-form" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div class="p-5 border-b border-slate-100 space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">Magnitud Mínima</label>
-              <input type="number" id="filter-min-mag" step="0.1" placeholder="Ej: 3.5" class="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500">
+              <div class="flex items-center gap-2">
+                <span class="p-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-sm">🌐</span>
+                <h3 class="text-base font-bold text-slate-900">Seguimiento e Historial de Eventos Sísmicos</h3>
+              </div>
+              <p class="text-xs text-slate-500 mt-0.5">Consultas manuales dinámicas a la API oficial del USGS (<code class="text-[11px] bg-slate-100 px-1 py-0.5 rounded text-indigo-600 font-mono">fdsnws/event/1/query</code>) y Catálogo Gold.</p>
             </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">Región / Ubicación</label>
-              <input type="text" id="filter-region" placeholder="Ej: California, Chile..." class="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500">
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">Desde</label>
-              <input type="date" id="filter-start-date" class="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500">
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">Hasta</label>
-              <input type="date" id="filter-end-date" class="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500">
-            </div>
-            <div class="flex items-end gap-2">
-              <button type="submit" class="flex-1 py-2 px-3 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition">
-                Filtrar
+            
+            <!-- Selector de Modo de Consulta -->
+            <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+              <button type="button" id="btn-mode-usgs" onclick="setQueryMode('usgs')" class="px-3 py-1.5 rounded-lg bg-white text-indigo-700 shadow-2xs font-bold transition cursor-pointer">
+                🌐 USGS Oficial (En Vivo)
               </button>
-              <button type="button" id="btn-reset-filters" class="py-2 px-3 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition">
-                Limpiar
+              <button type="button" id="btn-mode-gold" onclick="setQueryMode('gold')" class="px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition cursor-pointer">
+                🏛️ Capa Gold (Local)
               </button>
+            </div>
+          </div>
+
+          <!-- Formulario de Filtros Dinámicos -->
+          <form id="filter-form" onsubmit="handleFilterSubmit(event)" class="space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <!-- 1. Tipo de Consulta -->
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Tipo de Consulta</label>
+                <select id="filter-search-type" onchange="onSearchTypeChange()" class="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 bg-white font-medium">
+                  <option value="last_n_days" selected>Últimos N días</option>
+                  <option value="specific_day">Día Específico (24 Horas)</option>
+                  <option value="custom_range">Rango Personalizado de Fechas</option>
+                  <option value="full_month">Mes Completo</option>
+                  <option value="full_year">Año Completo</option>
+                </select>
+              </div>
+
+              <!-- 2. Contenedor Dinámico A: Últimos N días -->
+              <div id="field-container-last-days">
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Últimos Días</label>
+                <div class="flex items-center gap-1">
+                  <input type="number" id="filter-last-days" min="1" max="3650" value="7" class="w-20 text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-semibold text-center">
+                  <button type="button" onclick="setQuickDays(7)" class="px-2 py-1.5 text-[11px] bg-slate-100 hover:bg-slate-200 rounded text-slate-700 font-semibold cursor-pointer">7d</button>
+                  <button type="button" onclick="setQuickDays(30)" class="px-2 py-1.5 text-[11px] bg-slate-100 hover:bg-slate-200 rounded text-slate-700 font-semibold cursor-pointer">30d</button>
+                  <button type="button" onclick="setQuickDays(90)" class="px-2 py-1.5 text-[11px] bg-slate-100 hover:bg-slate-200 rounded text-slate-700 font-semibold cursor-pointer">90d</button>
+                  <button type="button" onclick="setQuickDays(365)" class="px-2 py-1.5 text-[11px] bg-slate-100 hover:bg-slate-200 rounded text-slate-700 font-semibold cursor-pointer">1a</button>
+                </div>
+              </div>
+
+              <!-- Contenedor Dinámico B: Día Específico -->
+              <div id="field-container-specific-day" class="hidden">
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Día Específico (UTC)</label>
+                <input type="date" id="filter-target-date" class="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500">
+              </div>
+
+              <!-- Contenedor Dinámico C: Rango Personalizado -->
+              <div id="field-container-custom-range" class="hidden lg:col-span-2 grid grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Fecha Inicial (Desde)</label>
+                  <input type="date" id="filter-start-date" class="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                  <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Fecha Final (Hasta)</label>
+                  <input type="date" id="filter-end-date" class="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500">
+                </div>
+              </div>
+
+              <!-- Contenedor Dinámico D: Mes Completo -->
+              <div id="field-container-full-month" class="hidden lg:col-span-2 grid grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Mes</label>
+                  <select id="filter-month" class="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 bg-white">
+                    <option value="1">Enero</option>
+                    <option value="2">Febrero</option>
+                    <option value="3">Marzo</option>
+                    <option value="4">Abril</option>
+                    <option value="5">Mayo</option>
+                    <option value="6">Junio</option>
+                    <option value="7">Julio</option>
+                    <option value="8">Agosto</option>
+                    <option value="9">Septiembre</option>
+                    <option value="10">Octubre</option>
+                    <option value="11">Noviembre</option>
+                    <option value="12">Diciembre</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Año</label>
+                  <input type="number" id="filter-month-year" min="1970" max="2030" class="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500">
+                </div>
+              </div>
+
+              <!-- Contenedor Dinámico E: Año Completo -->
+              <div id="field-container-full-year" class="hidden">
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Año Completo</label>
+                <input type="number" id="filter-full-year" min="1970" max="2030" class="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500">
+              </div>
+
+              <!-- 3. Magnitud Mínima -->
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Magnitud Mínima</label>
+                <input type="number" id="filter-min-mag" step="0.1" min="-2" max="10" value="2.5" placeholder="Default: 2.5" class="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-semibold">
+              </div>
+
+              <!-- 4. Ordenar Por -->
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Ordenar Por</label>
+                <select id="filter-orderby" class="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 bg-white">
+                  <option value="time" selected>Fecha (Más recientes primero)</option>
+                  <option value="time-asc">Fecha (Más antiguos primero)</option>
+                  <option value="magnitude">Magnitud (Mayor a menor)</option>
+                  <option value="magnitude-asc">Magnitud (Menor a mayor)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Botones de Acción y Resumen -->
+            <div class="flex flex-wrap items-center justify-between pt-2 border-t border-slate-100 gap-2">
+              <div class="flex items-center gap-2">
+                <button type="submit" id="btn-submit-search" class="py-2 px-5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition shadow-xs flex items-center gap-1.5 cursor-pointer">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                  <span>Consultar Catálogo</span>
+                </button>
+                <button type="button" onclick="resetSearchFilters()" class="py-2 px-3 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition cursor-pointer">
+                  Limpiar Filtros
+                </button>
+              </div>
+
+              <!-- Indicadores de Estado y Resultados -->
+              <div id="search-status-bar" class="flex flex-wrap items-center gap-2 text-xs">
+                <span id="badge-results-count" class="px-2.5 py-1 bg-indigo-50 text-indigo-700 font-bold rounded-md border border-indigo-100">
+                  Cargando catálogo...
+                </span>
+                <span id="badge-period-info" class="text-slate-500 text-[11px]"></span>
+              </div>
             </div>
           </form>
         </div>
 
-        <!-- Tabla -->
+        <!-- Indicador de Carga -->
+        <div id="events-loading" class="hidden py-12 text-center">
+          <div class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-xl text-xs font-bold">
+            <svg class="animate-spin h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+            </svg>
+            <span>Consultando datos reales de sismos...</span>
+          </div>
+        </div>
+
+        <!-- Tabla de Resultados -->
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse">
             <thead>
               <tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                 <th class="py-3 px-4">ID Evento</th>
                 <th class="py-3 px-4">Magnitud</th>
-                <th class="py-3 px-4">Ubicación Sanitizada</th>
+                <th class="py-3 px-4">Ubicación</th>
                 <th class="py-3 px-4">Región</th>
                 <th class="py-3 px-4">Profundidad</th>
+                <th class="py-3 px-4">Coordenadas (Lat, Lon)</th>
                 <th class="py-3 px-4">Fecha / Hora (UTC)</th>
               </tr>
             </thead>
@@ -236,8 +356,15 @@
               <!-- Cargado dinámicamente -->
             </tbody>
           </table>
-          <div id="events-empty" class="hidden text-center py-10 text-slate-400 text-sm">
-            No se encontraron eventos sísmicos con los criterios especificados.
+          <div id="events-empty" class="hidden text-center py-12 text-slate-500 text-sm">
+            <span class="text-2xl block mb-2">🔍</span>
+            <p class="font-bold text-slate-700">No se encontraron eventos sísmicos</p>
+            <p class="text-xs text-slate-400 mt-1">Prueba reduciendo la magnitud mínima o ampliando el período consultado.</p>
+          </div>
+          <div id="events-error" class="hidden text-center py-12 text-red-600 text-sm bg-red-50/50">
+            <span class="text-2xl block mb-2">⚠️</span>
+            <p id="events-error-message" class="font-bold">Error al consultar el catálogo sísmico</p>
+            <button onclick="loadEventsTable()" class="mt-3 px-4 py-1.5 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700 cursor-pointer">Reintentar</button>
           </div>
         </div>
 
@@ -245,10 +372,10 @@
         <div class="p-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 bg-slate-50">
           <span id="page-info">Página 1</span>
           <div class="flex items-center gap-2">
-            <button id="btn-prev-page" class="px-3 py-1.5 border border-slate-200 rounded-lg bg-white hover:bg-slate-100 font-semibold disabled:opacity-40">
+            <button id="btn-prev-page" class="px-3 py-1.5 border border-slate-200 rounded-lg bg-white hover:bg-slate-100 font-semibold disabled:opacity-40 cursor-pointer">
               Anterior
             </button>
-            <button id="btn-next-page" class="px-3 py-1.5 border border-slate-200 rounded-lg bg-white hover:bg-slate-100 font-semibold disabled:opacity-40">
+            <button id="btn-next-page" class="px-3 py-1.5 border border-slate-200 rounded-lg bg-white hover:bg-slate-100 font-semibold disabled:opacity-40 cursor-pointer">
               Siguiente
             </button>
           </div>
@@ -268,7 +395,20 @@
             </div>
           </div>
         </div>
-        <div class="flex items-center gap-2 text-xs">
+        <div class="flex flex-wrap items-center gap-2 text-xs">
+          <!-- Selector Modo Texto / Voz -->
+          <div class="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+            <button type="button" id="chat-mode-text" onclick="setChatInputMode('text')" class="px-2.5 py-1 rounded-md bg-white text-indigo-700 font-bold shadow-2xs transition cursor-pointer">
+              💬 Texto
+            </button>
+            <button type="button" id="chat-mode-voice" onclick="setChatInputMode('voice')" class="px-2.5 py-1 rounded-md text-slate-600 hover:text-slate-900 font-semibold transition cursor-pointer">
+              🎙️ Voz
+            </button>
+          </div>
+          <!-- Toggle para lectura por voz de respuestas (Text-to-Speech) -->
+          <button type="button" id="btn-toggle-tts" onclick="toggleTextToSpeech()" title="Activar/desactivar lectura por voz de respuestas" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg border border-slate-200 font-medium flex items-center gap-1 cursor-pointer">
+            <span id="tts-icon">🔊</span> <span id="tts-label" class="hidden sm:inline">Voz: Activada</span>
+          </button>
           <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-full font-bold flex items-center gap-1.5">
             <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             Capa Gold Activa
@@ -315,8 +455,14 @@
 
         <!-- Input de Entrada de Mensaje -->
         <div class="p-4 border-t border-slate-100 bg-slate-50/50 rounded-b-xl">
-          <form id="chat-form" onsubmit="handleChatSubmit(event)" class="flex gap-2">
-            <input type="text" id="chat-input" placeholder="Escribe tu consulta sismológica o pregunta sobre los datos de la Capa Gold..." autocomplete="off" class="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500 shadow-2xs" />
+          <form id="chat-form" onsubmit="handleChatSubmit(event)" class="flex gap-2 items-center">
+            <input type="text" id="chat-input" placeholder="Escribe tu consulta o usa el micrófono para dictar..." autocomplete="off" class="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500 shadow-2xs" />
+            
+            <!-- Botón de Micrófono para Dictado por Voz -->
+            <button type="button" id="btn-mic" onclick="toggleVoiceDictation()" title="Dictar por voz" class="p-3 bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 rounded-xl transition border border-slate-200 cursor-pointer">
+              <svg id="mic-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+            </button>
+
             <button type="submit" id="chat-send-btn" class="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer">
               <span>Enviar</span>
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>

@@ -14,14 +14,23 @@ const state = {
   mapMarkers: [],
   charts: {},
   sseSource: null,
+  queryMode: "usgs", // "usgs" (API Oficial USGS) o "gold" (PostgreSQL Gold)
   filters: {
     page: 1,
     pageSize: 15,
-    minMag: "",
-    region: "",
+    searchType: "last_n_days",
+    lastDays: 7,
+    targetDate: "",
     startDate: "",
-    endDate: ""
-  }
+    endDate: "",
+    month: new Date().getMonth() + 1,
+    year: new Date().getFullYear(),
+    minMag: 2.5,
+    orderBy: "time"
+  },
+  ttsEnabled: true,
+  speechRecognition: null,
+  isListening: false
 };
 
 // ------------------------------------------------------------------------------
@@ -238,23 +247,27 @@ function initMap() {
 
 function renderMapMarkers(events) {
   if (!state.map) initMap();
+  if (!state.map) return;
 
   // Limpiar marcadores anteriores
   state.mapMarkers.forEach(m => state.map.removeLayer(m));
   state.mapMarkers = [];
 
+  const latLngs = [];
+
   events.forEach(ev => {
     if (ev.latitude == null || ev.longitude == null) return;
-    const mag = parseFloat(ev.magnitude);
+    const mag = parseFloat(ev.magnitude) || 0.0;
     
-    // Color según magnitud
-    let color = "#22c55e"; // < 4.0
-    if (mag >= 7.0) color = "#ef4444"; // Crítico
+    // Color según magnitud sismológica
+    let color = "#22c55e"; // < 3.0 Micro
+    if (mag >= 7.0) color = "#ef4444"; // Mayor
     else if (mag >= 5.5) color = "#f97316"; // Fuerte
     else if (mag >= 4.0) color = "#eab308"; // Moderado
+    else if (mag >= 3.0) color = "#3b82f6"; // Menor
 
     const circle = L.circleMarker([ev.latitude, ev.longitude], {
-      radius: Math.max(mag * 2.5, 5),
+      radius: Math.max(mag * 2.8, 5),
       fillColor: color,
       color: "#ffffff",
       weight: 1.5,
@@ -262,18 +275,35 @@ function renderMapMarkers(events) {
       fillOpacity: 0.75
     }).addTo(state.map);
 
+    const eventTimeStr = ev.event_time ? new Date(ev.event_time).toUTCString() : (ev.time ? new Date(ev.time).toUTCString() : 'N/A');
+
     circle.bindPopup(`
-      <div class="text-sm p-1">
-        <h4 class="font-bold text-slate-900">M ${mag.toFixed(1)} - ${ev.place}</h4>
-        <p class="text-xs text-slate-600 mt-1">Profundidad: <b>${ev.depth_km} km</b></p>
-        <p class="text-xs text-slate-600">Fecha: ${new Date(ev.event_time).toLocaleString()}</p>
-        ${ev.is_anomaly ? `<p class="text-xs font-semibold text-amber-600 mt-1">⚠️ ${ev.anomaly_reason || 'Anomalía Sísmica'}</p>` : ''}
-        ${ev.tsunami_alert ? `<p class="text-xs font-bold text-red-600">🌊 Alerta de Tsunami</p>` : ''}
+      <div class="text-xs p-1">
+        <h4 class="font-bold text-slate-900 text-sm">M ${mag.toFixed(1)} - ${ev.place}</h4>
+        <p class="text-slate-600 mt-1">Región: <b>${ev.region || 'Global'}</b></p>
+        <p class="text-slate-600">Profundidad: <b>${ev.depth_km} km</b></p>
+        <p class="text-slate-600">Coordenadas: <b>${ev.latitude}, ${ev.longitude}</b></p>
+        <p class="text-slate-500 mt-0.5">Fecha UTC: ${eventTimeStr}</p>
+        ${ev.is_anomaly ? `<p class="font-semibold text-amber-600 mt-1">⚠️ ${ev.anomaly_reason || 'Anomalía Sísmica'}</p>` : ''}
+        ${ev.tsunami_alert ? `<p class="font-bold text-red-600">🌊 Alerta de Tsunami</p>` : ''}
+        ${ev.url ? `<p class="mt-2"><a href="${ev.url}" target="_blank" class="text-indigo-600 hover:underline font-semibold flex items-center gap-1">Ver ficha USGS oficial &rarr;</a></p>` : ''}
       </div>
     `);
 
     state.mapMarkers.push(circle);
+    latLngs.push([ev.latitude, ev.longitude]);
   });
+
+  // Ajustar la vista suavemente para visualizar los sismos consultados
+  if (latLngs.length > 1) {
+    try {
+      state.map.fitBounds(L.latLngBounds(latLngs), { padding: [35, 35], maxZoom: 8 });
+    } catch (e) {
+      // Ignorar si los límites son planos
+    }
+  } else if (latLngs.length === 1) {
+    state.map.setView(latLngs[0], 5);
+  }
 }
 
 async function loadCharts() {
@@ -383,70 +413,222 @@ function renderRegionsChart(data) {
   });
 }
 
+// ------------------------------------------------------------------------------
+// Controladores del Módulo de Seguimiento e Historial Sísmico (USGS & Gold)
+// ------------------------------------------------------------------------------
+window.setQueryMode = function(mode) {
+  state.queryMode = mode;
+  state.filters.page = 1;
+  const btnUsgs = document.getElementById("btn-mode-usgs");
+  const btnGold = document.getElementById("btn-mode-gold");
+  if (btnUsgs && btnGold) {
+    if (mode === "usgs") {
+      btnUsgs.className = "px-3 py-1.5 rounded-lg bg-white text-indigo-700 shadow-2xs font-bold transition cursor-pointer";
+      btnGold.className = "px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition cursor-pointer";
+    } else {
+      btnGold.className = "px-3 py-1.5 rounded-lg bg-white text-indigo-700 shadow-2xs font-bold transition cursor-pointer";
+      btnUsgs.className = "px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition cursor-pointer";
+    }
+  }
+  showToast(`Modo cambiado: ${mode === 'usgs' ? 'Consulta Oficial USGS (En Vivo)' : 'Catálogo Local Capa Gold'}`, "info");
+  loadEventsTable();
+};
+
+window.onSearchTypeChange = function() {
+  const select = document.getElementById("filter-search-type");
+  const type = select ? select.value : "last_n_days";
+  state.filters.searchType = type;
+
+  const containers = {
+    last_n_days: document.getElementById("field-container-last-days"),
+    specific_day: document.getElementById("field-container-specific-day"),
+    custom_range: document.getElementById("field-container-custom-range"),
+    full_month: document.getElementById("field-container-full-month"),
+    full_year: document.getElementById("field-container-full-year")
+  };
+
+  Object.entries(containers).forEach(([key, el]) => {
+    if (!el) return;
+    if (key === type) el.classList.remove("hidden");
+    else el.classList.add("hidden");
+  });
+};
+
+window.setQuickDays = function(days) {
+  const input = document.getElementById("filter-last-days");
+  if (input) input.value = days;
+  state.filters.lastDays = days;
+  state.filters.page = 1;
+  loadEventsTable();
+};
+
+window.resetSearchFilters = function() {
+  const form = document.getElementById("filter-form");
+  if (form) form.reset();
+  state.filters.page = 1;
+  state.filters.searchType = "last_n_days";
+  state.filters.lastDays = 7;
+  state.filters.minMag = 2.5;
+  state.filters.orderBy = "time";
+  
+  const selectType = document.getElementById("filter-search-type");
+  if (selectType) selectType.value = "last_n_days";
+  const inputDays = document.getElementById("filter-last-days");
+  if (inputDays) inputDays.value = 7;
+  const inputMag = document.getElementById("filter-min-mag");
+  if (inputMag) inputMag.value = 2.5;
+  const selectOrder = document.getElementById("filter-orderby");
+  if (selectOrder) selectOrder.value = "time";
+
+  onSearchTypeChange();
+  loadEventsTable();
+};
+
+window.handleFilterSubmit = function(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  state.filters.page = 1;
+  loadEventsTable();
+};
+
 async function loadEventsTable() {
   const tbody = document.getElementById("events-table-body");
   const emptyState = document.getElementById("events-empty");
-  tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-slate-400">Cargando eventos sísmicos...</td></tr>`;
+  const errorState = document.getElementById("events-error");
+  const loadingState = document.getElementById("events-loading");
+  const countBadge = document.getElementById("badge-results-count");
+  const periodBadge = document.getElementById("badge-period-info");
 
-  const queryParams = new URLSearchParams({
-    page: state.filters.page,
-    page_size: state.filters.pageSize
-  });
+  if (loadingState) loadingState.classList.remove("hidden");
+  if (emptyState) emptyState.classList.add("hidden");
+  if (errorState) errorState.classList.add("hidden");
+  tbody.innerHTML = "";
 
-  if (state.filters.minMag) queryParams.append("min_magnitude", state.filters.minMag);
-  if (state.filters.region) queryParams.append("region", state.filters.region);
-  if (state.filters.startDate) queryParams.append("start_date", state.filters.startDate);
-  if (state.filters.endDate) queryParams.append("end_date", state.filters.endDate);
+  // Extraer valores actuales de los inputs
+  const searchType = document.getElementById("filter-search-type") ? document.getElementById("filter-search-type").value : "last_n_days";
+  const lastDays = document.getElementById("filter-last-days") ? parseInt(document.getElementById("filter-last-days").value) || 7 : 7;
+  const targetDate = document.getElementById("filter-target-date") ? document.getElementById("filter-target-date").value : "";
+  const startDate = document.getElementById("filter-start-date") ? document.getElementById("filter-start-date").value : "";
+  const endDate = document.getElementById("filter-end-date") ? document.getElementById("filter-end-date").value : "";
+  const month = document.getElementById("filter-month") ? parseInt(document.getElementById("filter-month").value) || (new Date().getMonth() + 1) : (new Date().getMonth() + 1);
+  const monthYear = document.getElementById("filter-month-year") ? parseInt(document.getElementById("filter-month-year").value) || new Date().getFullYear() : new Date().getFullYear();
+  const fullYear = document.getElementById("filter-full-year") ? parseInt(document.getElementById("filter-full-year").value) || new Date().getFullYear() : new Date().getFullYear();
+  const minMag = document.getElementById("filter-min-mag") ? parseFloat(document.getElementById("filter-min-mag").value) || 2.5 : 2.5;
+  const orderby = document.getElementById("filter-orderby") ? document.getElementById("filter-orderby").value : "time";
 
   try {
-    const res = await fetchAuth(`${API_BASE}/api/events?${queryParams}`);
-    if (!res.ok) throw new Error("Error en consulta");
-    const data = await res.json();
+    let url = "";
+    let data = null;
 
-    if (data.events.length === 0) {
-      tbody.innerHTML = "";
-      emptyState.classList.remove("hidden");
+    if (state.queryMode === "usgs") {
+      const qParams = new URLSearchParams({
+        search_type: searchType,
+        min_magnitude: minMag,
+        orderby: orderby,
+        page: state.filters.page,
+        page_size: state.filters.pageSize
+      });
+      if (searchType === "last_n_days") qParams.append("last_days", lastDays);
+      else if (searchType === "specific_day" && targetDate) qParams.append("target_date", targetDate);
+      else if (searchType === "custom_range") {
+        if (startDate) qParams.append("start_date", startDate);
+        if (endDate) qParams.append("end_date", endDate);
+      } else if (searchType === "full_month") {
+        qParams.append("month", month);
+        qParams.append("year", monthYear);
+      } else if (searchType === "full_year") {
+        qParams.append("year", fullYear);
+      }
+
+      url = `${API_BASE}/api/events/usgs-query?${qParams.toString()}`;
+      const res = await fetchAuth(url);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "Error en servidor USGS" }));
+        throw new Error(err.detail || "Error consultando API del USGS");
+      }
+      data = await res.json();
+
+      if (countBadge) countBadge.textContent = `${data.total.toLocaleString()} sismos en USGS Oficial (M ≥ ${minMag})`;
+      if (periodBadge && data.period) {
+        periodBadge.textContent = `Período: ${data.period.starttime.replace('T', ' ')} a ${data.period.endtime.replace('T', ' ')} UTC`;
+      }
+    } else {
+      // Modo Capa Gold local
+      const qParams = new URLSearchParams({
+        page: state.filters.page,
+        page_size: state.filters.pageSize,
+        min_magnitude: minMag
+      });
+      if (startDate) qParams.append("start_date", startDate);
+      if (endDate) qParams.append("end_date", endDate);
+
+      url = `${API_BASE}/api/events?${qParams.toString()}`;
+      const res = await fetchAuth(url);
+      if (!res.ok) throw new Error("Error consultando Capa Gold");
+      data = await res.json();
+
+      if (countBadge) countBadge.textContent = `${data.total} sismos en Catálogo Gold (M ≥ ${minMag})`;
+      if (periodBadge) periodBadge.textContent = `Almacenados en PostgreSQL Gold`;
+    }
+
+    if (loadingState) loadingState.classList.add("hidden");
+
+    if (!data || !data.events || data.events.length === 0) {
+      if (emptyState) emptyState.classList.remove("hidden");
+      renderMapMarkers([]);
       return;
     }
 
-    emptyState.classList.add("hidden");
+    // Renderizar filas de la tabla (7 columnas completas solicitadas)
     tbody.innerHTML = data.events.map(ev => {
-      const mag = parseFloat(ev.magnitude).toFixed(1);
-      const isAnomaly = ev.is_anomaly;
+      const magVal = parseFloat(ev.magnitude) || 0.0;
       let magBadgeClass = "bg-emerald-100 text-emerald-800";
-      if (mag >= 7.0) magBadgeClass = "bg-red-600 text-white font-bold";
-      else if (mag >= 5.5) magBadgeClass = "bg-orange-100 text-orange-800 font-bold";
-      else if (mag >= 4.0) magBadgeClass = "bg-amber-100 text-amber-800";
+      if (magVal >= 7.0) magBadgeClass = "bg-red-600 text-white font-bold";
+      else if (magVal >= 5.5) magBadgeClass = "bg-orange-100 text-orange-800 font-bold";
+      else if (magVal >= 4.0) magBadgeClass = "bg-amber-100 text-amber-800";
+      else if (magVal >= 3.0) magBadgeClass = "bg-blue-100 text-blue-800";
+
+      const coordsStr = (ev.latitude != null && ev.longitude != null) 
+        ? `${ev.latitude}, ${ev.longitude}` 
+        : 'N/A';
+      const eventTimeStr = ev.event_time ? new Date(ev.event_time).toUTCString() : (ev.time ? new Date(ev.time).toUTCString() : 'N/A');
 
       return `
-        <tr class="hover:bg-slate-50 transition border-b border-slate-100 text-sm">
-          <td class="py-3 px-4 font-mono font-medium text-slate-700">${ev.id}</td>
+        <tr class="hover:bg-slate-50 transition border-b border-slate-100 text-xs">
+          <td class="py-3 px-4 font-mono font-bold text-indigo-700">
+            ${ev.url ? `<a href="${ev.url}" target="_blank" class="hover:underline flex items-center gap-1">${ev.id} <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg></a>` : ev.id}
+          </td>
           <td class="py-3 px-4">
-            <span class="px-2.5 py-1 rounded-full text-xs font-semibold ${magBadgeClass}">M ${mag}</span>
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold ${magBadgeClass}">M ${magVal.toFixed(1)}</span>
           </td>
           <td class="py-3 px-4 font-medium text-slate-800">
             ${ev.place}
-            ${isAnomaly ? `<span class="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800" title="${ev.anomaly_reason || ''}">⚠️ Anomalía</span>` : ''}
+            ${ev.is_anomaly ? `<span class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">⚠️ Anomalía</span>` : ''}
             ${ev.tsunami_alert ? `<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800">🌊 Tsunami</span>` : ''}
           </td>
-          <td class="py-3 px-4 text-slate-600">${ev.region}</td>
-          <td class="py-3 px-4 text-slate-600">${ev.depth_km} km</td>
-          <td class="py-3 px-4 text-slate-500 text-xs">${new Date(ev.event_time).toLocaleString()}</td>
+          <td class="py-3 px-4 text-slate-600">${ev.region || 'Global'}</td>
+          <td class="py-3 px-4 text-slate-600 font-semibold">${ev.depth_km} km</td>
+          <td class="py-3 px-4 font-mono text-[11px] text-slate-500">${coordsStr}</td>
+          <td class="py-3 px-4 text-slate-500 text-[11px] whitespace-nowrap">${eventTimeStr}</td>
         </tr>
       `;
     }).join("");
 
-    // Renderizar eventos en el mapa
-    renderMapMarkers(data.events);
+    // Actualizar marcadores en el mapa Leaflet con los sismos consultados
+    renderMapMarkers(data.map_markers || data.events);
 
-    // Actualizar controles de paginación
+    // Paginación
     const maxPage = Math.ceil(data.total / state.filters.pageSize) || 1;
-    document.getElementById("page-info").textContent = `Página ${state.filters.page} de ${maxPage} (${data.total} eventos)`;
+    document.getElementById("page-info").textContent = `Página ${state.filters.page} de ${maxPage} (${data.total.toLocaleString()} sismos)`;
     document.getElementById("btn-prev-page").disabled = state.filters.page <= 1;
     document.getElementById("btn-next-page").disabled = state.filters.page >= maxPage;
 
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-red-500 font-medium">Error al cargar datos. Compruebe la conexión con la API.</td></tr>`;
+    if (loadingState) loadingState.classList.add("hidden");
+    if (errorState) {
+      errorState.classList.remove("hidden");
+      document.getElementById("events-error-message").textContent = `Error: ${err.message}`;
+    }
+    showToast(`Fallo al consultar sismos: ${err.message}`, "error");
   }
 }
 
@@ -854,11 +1036,111 @@ function appendChatMessage(role, content, sources = []) {
         ${sourcesBadge}
       </div>
     `;
+
+    // Reproducir respuesta por voz si el sintetizador de voz está activo
+    speakAssistantReply(content);
   }
 
   container.appendChild(msgDiv);
   container.scrollTop = container.scrollHeight;
 }
+
+// ------------------------------------------------------------------------------
+// Selector y Controles de Voz para el Asistente IA (Web Speech API)
+// ------------------------------------------------------------------------------
+window.setChatInputMode = function(mode) {
+  const btnText = document.getElementById("chat-mode-text");
+  const btnVoice = document.getElementById("chat-mode-voice");
+  if (mode === "voice") {
+    if (btnVoice) btnVoice.className = "px-2.5 py-1 rounded-md bg-white text-indigo-700 font-bold shadow-2xs transition cursor-pointer";
+    if (btnText) btnText.className = "px-2.5 py-1 rounded-md text-slate-600 hover:text-slate-900 font-semibold transition cursor-pointer";
+    showToast("Modo de voz activado. Haz clic en el micrófono para dictar.", "info");
+    toggleVoiceDictation();
+  } else {
+    if (btnText) btnText.className = "px-2.5 py-1 rounded-md bg-white text-indigo-700 font-bold shadow-2xs transition cursor-pointer";
+    if (btnVoice) btnVoice.className = "px-2.5 py-1 rounded-md text-slate-600 hover:text-slate-900 font-semibold transition cursor-pointer";
+  }
+};
+
+window.toggleTextToSpeech = function() {
+  state.ttsEnabled = !state.ttsEnabled;
+  const icon = document.getElementById("tts-icon");
+  const label = document.getElementById("tts-label");
+  if (state.ttsEnabled) {
+    if (icon) icon.textContent = "🔊";
+    if (label) label.textContent = "Voz: Activada";
+    showToast("Lectura por voz activada", "success");
+  } else {
+    if (icon) icon.textContent = "🔇";
+    if (label) label.textContent = "Voz: Desactivada";
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    showToast("Lectura por voz desactivada", "info");
+  }
+};
+
+window.speakAssistantReply = function(text) {
+  if (!state.ttsEnabled || !window.speechSynthesis) return;
+  try {
+    window.speechSynthesis.cancel();
+    const clean = text.replace(/[*#_`~>•]/g, "").replace(/\n+/g, ". ");
+    const utterance = new SpeechSynthesisUtterance(clean);
+    utterance.lang = "es-ES";
+    utterance.rate = 1.05;
+    window.speechSynthesis.speak(utterance);
+  } catch (e) {
+    // Silencioso si el navegador no permite audio automático
+  }
+};
+
+window.toggleVoiceDictation = function() {
+  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRec) {
+    showToast("Tu navegador no soporta reconocimiento de voz nativo (Web Speech API). Usa Google Chrome o Edge.", "warning");
+    return;
+  }
+
+  const btnMic = document.getElementById("btn-mic");
+  const input = document.getElementById("chat-input");
+
+  if (state.isListening && state.speechRecognition) {
+    state.speechRecognition.stop();
+    state.isListening = false;
+    if (btnMic) btnMic.className = "p-3 bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 rounded-xl transition border border-slate-200 cursor-pointer";
+    return;
+  }
+
+  const rec = new SpeechRec();
+  rec.lang = "es-ES";
+  rec.continuous = false;
+  rec.interimResults = false;
+
+  rec.onstart = function() {
+    state.isListening = true;
+    if (btnMic) btnMic.className = "p-3 bg-red-100 text-red-600 animate-pulse rounded-xl transition border border-red-300 cursor-pointer";
+    showToast("Escuchando tu pregunta... habla ahora.", "info");
+  };
+
+  rec.onresult = function(e) {
+    const transcript = e.results[0][0].transcript;
+    if (input) input.value = transcript;
+    showToast(`Pregunta escuchada: "${transcript}"`, "success");
+    handleChatSubmit(new Event("submit"));
+  };
+
+  rec.onerror = function(e) {
+    state.isListening = false;
+    if (btnMic) btnMic.className = "p-3 bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 rounded-xl transition border border-slate-200 cursor-pointer";
+    showToast(`Error de micrófono: ${e.error}`, "warning");
+  };
+
+  rec.onend = function() {
+    state.isListening = false;
+    if (btnMic) btnMic.className = "p-3 bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 rounded-xl transition border border-slate-200 cursor-pointer";
+  };
+
+  state.speechRecognition = rec;
+  rec.start();
+};
 
 function appendChatLoading() {
   const container = document.getElementById("chat-messages");
@@ -893,22 +1175,28 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("login-form").addEventListener("submit", handleLogin);
   document.getElementById("btn-logout").addEventListener("click", handleLogout);
 
-  // Filtros de tabla
-  document.getElementById("filter-form").addEventListener("submit", (e) => {
-    e.preventDefault();
-    state.filters.minMag = document.getElementById("filter-min-mag").value;
-    state.filters.region = document.getElementById("filter-region").value;
-    state.filters.startDate = document.getElementById("filter-start-date").value;
-    state.filters.endDate = document.getElementById("filter-end-date").value;
-    state.filters.page = 1;
-    loadEventsTable();
-  });
+  // Inicializar fechas por defecto en los filtros
+  const today = new Date();
+  const past7 = new Date();
+  past7.setDate(today.getDate() - 7);
 
-  document.getElementById("btn-reset-filters").addEventListener("click", () => {
-    document.getElementById("filter-form").reset();
-    state.filters = { page: 1, pageSize: 15, minMag: "", region: "", startDate: "", endDate: "" };
-    loadEventsTable();
-  });
+  const targetDateInput = document.getElementById("filter-target-date");
+  if (targetDateInput) targetDateInput.value = today.toISOString().split("T")[0];
+
+  const startDateInput = document.getElementById("filter-start-date");
+  if (startDateInput) startDateInput.value = past7.toISOString().split("T")[0];
+
+  const endDateInput = document.getElementById("filter-end-date");
+  if (endDateInput) endDateInput.value = today.toISOString().split("T")[0];
+
+  const monthYearInput = document.getElementById("filter-month-year");
+  if (monthYearInput) monthYearInput.value = today.getFullYear();
+
+  const fullYearInput = document.getElementById("filter-full-year");
+  if (fullYearInput) fullYearInput.value = today.getFullYear();
+
+  const monthSelect = document.getElementById("filter-month");
+  if (monthSelect) monthSelect.value = (today.getMonth() + 1).toString();
 
   // Paginación
   document.getElementById("btn-prev-page").addEventListener("click", () => {

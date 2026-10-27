@@ -137,3 +137,102 @@ def test_chat_ai_endpoint(monkeypatch):
     assert "reply" in data
     assert "gold.fact_earthquakes" in data["data_sources"]
     assert "5.4" in data["reply"] or "Chile" in data["reply"]
+
+def test_usgs_historical_query_last_days(monkeypatch):
+    """
+    Verifica la consulta al catálogo oficial de USGS para los últimos N días.
+    """
+    sample_geojson = {
+        "type": "FeatureCollection",
+        "metadata": {"count": 2, "status": 200},
+        "features": [
+            {
+                "id": "us7000test1",
+                "properties": {"mag": 5.2, "place": "Near coast of Peru", "time": 1729876543000, "updated": 1729876600000, "tsunami": 0, "sig": 415},
+                "geometry": {"type": "Point", "coordinates": [-76.2, -14.1, 35.0]}
+            },
+            {
+                "id": "us7000test2",
+                "properties": {"mag": 3.4, "place": "Central California", "time": 1729876000000, "updated": 1729876100000, "tsunami": 0, "sig": 180},
+                "geometry": {"type": "Point", "coordinates": [-120.5, 36.2, 8.0]}
+            }
+        ]
+    }
+    
+    class MockResponse:
+        status_code = 200
+        def json(self): return sample_geojson
+
+    async def mock_get(self, url, **kwargs):
+        return MockResponse()
+
+    monkeypatch.setattr("httpx.AsyncClient.get", mock_get)
+
+    login_res = client.post("/auth/login", json={
+        "username": api_settings.VIEWER_USERNAME,
+        "password": api_settings.VIEWER_PASSWORD
+    })
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    res = client.get("/api/events/usgs-query?search_type=last_n_days&last_days=7&min_magnitude=2.5", headers=headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 2
+    assert len(data["events"]) == 2
+    assert data["events"][0]["id"] == "us7000test1"
+    assert data["events"][0]["magnitude"] == 5.2
+    assert "map_markers" in data
+    assert len(data["map_markers"]) == 2
+
+def test_usgs_historical_query_specific_day(monkeypatch):
+    """
+    Verifica la consulta de sismos para un día específico (24 horas) en formato ISO UTC.
+    """
+    sample_geojson = {
+        "type": "FeatureCollection",
+        "metadata": {"count": 1, "status": 200},
+        "features": [{
+            "id": "us7000daytest",
+            "properties": {"mag": 4.6, "place": "Fox Islands, Aleutian Islands", "time": 1729850000000, "updated": 1729850100000, "tsunami": 0, "sig": 320},
+            "geometry": {"type": "Point", "coordinates": [-168.5, 53.2, 45.0]}
+        }]
+    }
+
+    class MockResponse:
+        status_code = 200
+        def json(self): return sample_geojson
+
+    async def mock_get(self, url, **kwargs):
+        # Verificar que starttime y endtime cubran las 24 horas del día
+        params = kwargs.get("params", {})
+        assert "2026-10-25T00:00:00" in params.get("starttime", "")
+        assert "2026-10-25T23:59:59" in params.get("endtime", "")
+        return MockResponse()
+
+    monkeypatch.setattr("httpx.AsyncClient.get", mock_get)
+
+    login_res = client.post("/auth/login", json={
+        "username": api_settings.VIEWER_USERNAME,
+        "password": api_settings.VIEWER_PASSWORD
+    })
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    res = client.get("/api/events/usgs-query?search_type=specific_day&target_date=2026-10-25&min_magnitude=4.0", headers=headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 1
+    assert data["events"][0]["magnitude"] == 4.6
+
+def test_usgs_historical_query_invalid_search_type():
+    """Valida rechazo 400 ante tipos de búsqueda no reconocidos."""
+    login_res = client.post("/auth/login", json={
+        "username": api_settings.VIEWER_USERNAME,
+        "password": api_settings.VIEWER_PASSWORD
+    })
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    res = client.get("/api/events/usgs-query?search_type=invalid_type", headers=headers)
+    assert res.status_code == 400
