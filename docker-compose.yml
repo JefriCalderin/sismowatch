@@ -157,20 +157,15 @@ services:
   # 5. Apache Spark - Master (Puerto 7077 y Web UI 8081)
   # ==============================================================================
   spark-master:
-    image: bitnami/spark:3.5.0
+    image: apache/spark:3.5.0
     container_name: sismowatch-spark-master
     restart: always
-    environment:
-      - SPARK_MODE=master
-      - SPARK_RPC_AUTHENTICATION_ENABLED=no
-      - SPARK_RPC_ENCRYPTION_ENABLED=no
-      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
-      - SPARK_SSL_ENABLED=no
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master --webui-port 8080
     ports:
       - "7077:7077"
       - "8081:8080"
     volumes:
-      - ./spark/jobs:/opt/bitnami/spark/jobs
+      - ./spark/jobs:/opt/spark/jobs
     networks:
       - sismowatch-net
 
@@ -178,22 +173,14 @@ services:
   # 6. Apache Spark - Worker
   # ==============================================================================
   spark-worker:
-    image: bitnami/spark:3.5.0
+    image: apache/spark:3.5.0
     container_name: sismowatch-spark-worker
     restart: always
     depends_on:
       - spark-master
-    environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
-      - SPARK_WORKER_MEMORY=1G
-      - SPARK_WORKER_CORES=2
-      - SPARK_RPC_AUTHENTICATION_ENABLED=no
-      - SPARK_RPC_ENCRYPTION_ENABLED=no
-      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
-      - SPARK_SSL_ENABLED=no
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     volumes:
-      - ./spark/jobs:/opt/bitnami/spark/jobs
+      - ./spark/jobs:/opt/spark/jobs
     networks:
       - sismowatch-net
 
