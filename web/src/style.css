@@ -47,14 +47,14 @@
 }
 
 /* ==============================================================================
-   Modo Oscuro (Dark Mode)
+   Modo Oscuro (Dark Mode) - Paleta Refinada Alta Cohesión
    ============================================================================== */
 html.dark {
   color-scheme: dark;
 }
 
 html.dark body {
-  background-color: #0b1120 !important;
+  background-color: #0b1120 !important; /* Deep Slate Navy */
   color: #f1f5f9 !important;
 }
 
@@ -80,6 +80,33 @@ html.dark .bg-slate-100 {
   border-color: #334155 !important;
 }
 
+/* Badges y chips en Modo Oscuro */
+html.dark .bg-slate-200 {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+  color: #cbd5e1 !important;
+}
+
+html.dark .bg-indigo-50 {
+  background-color: rgba(30, 27, 75, 0.6) !important;
+  border-color: rgba(67, 56, 202, 0.4) !important;
+  color: #c7d2fe !important;
+}
+
+html.dark .bg-emerald-50,
+html.dark .bg-emerald-100 {
+  background-color: rgba(6, 78, 59, 0.4) !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+  color: #6ee7b7 !important;
+}
+
+html.dark .bg-amber-50,
+html.dark .bg-amber-100 {
+  background-color: rgba(120, 53, 15, 0.35) !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+  color: #fcd34d !important;
+}
+
 html.dark .border-slate-200,
 html.dark .border-slate-100 {
   border-color: #1e293b !important;
@@ -103,6 +130,12 @@ html.dark .text-slate-600 {
 html.dark .text-slate-500,
 html.dark .text-slate-400 {
   color: #94a3b8 !important;
+}
+
+html.dark code {
+  background-color: #0b1120 !important;
+  border-color: #334155 !important;
+  color: #a5b4fc !important;
 }
 
 html.dark input,

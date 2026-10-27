@@ -58,6 +58,10 @@ Asistente: Durante un sismo sigue estas 3 pautas prioritarias:
 1. **Agáchese, Cúbrase y Agárrese** debajo de una mesa resistente o junto a un muro estructural.
 2. Aléjese de ventanas, cristales y objetos colgantes.
 3. No use ascensores y espere a que termine el movimiento para evacuar.
+
+[Ejemplo 7 - Último sismo reciente / últimos minutos]
+Usuario: cual fue el ultimo sismo que ocurrio en los ultimos 5 minutos?
+Asistente: El sismo más reciente registrado en la capa Gold es de **M 0.70**, ocurrido en **85 km NW of Karluk, Alaska** (Alaska) a una profundidad de **10.0 km** (2026-10-27 15:49:03 UTC). Alerta de tsunami: No.
 """
 
 class ChatMessage(BaseModel):
@@ -242,6 +246,19 @@ def generate_offline_intelligent_response(question: str, ctx: Dict[str, Any]) ->
             return f"⚠️ **Atención:** Se registran **{active_tsunami} alerta(s) de tsunami** asociadas a eventos recientes en la capa Gold."
         return "Actualmente **no hay alertas de tsunami activas** en los registros de la capa Gold."
 
+    # 3.5. Último sismo registrado / Más reciente / Últimos minutos
+    if any(k in q for k in ["ultimo sismo", "último sismo", "mas reciente", "más reciente", "ultimo temblor", "último temblor", "ultimo evento", "último evento", "ultimos minutos", "últimos minutos", "ultimos 5 minutos", "últimos 5 minutos", "hace poco", "recien", "recién"]):
+        if not recent_events:
+            return "Actualmente no hay registros de sismos recientes en la capa Gold."
+        latest = recent_events[0]
+        event_time_str = latest['event_time'].strftime('%Y-%m-%d %H:%M:%S UTC') if latest.get('event_time') else 'Hora no disponible'
+        tsunami_str = "Sí" if latest.get('tsunami_alert') else "No"
+        return (
+            f"El sismo más reciente registrado en la capa Gold es de **M {latest.get('magnitude')}**, "
+            f"ocurrido en **{latest.get('place')}** ({latest.get('region', 'N/A')}) a una profundidad de **{latest.get('depth_km')} km** "
+            f"el **{event_time_str}**. Alerta de tsunami: **{tsunami_str}**."
+        )
+
     # 4. Sismo más fuerte puntual
     if any(k in q for k in ["fuerte", "mayor magnitud", "mas alto", "más alto", "máxima", "maximo", "máximo", "intens", "epicentro"]):
         if not top_events:
@@ -254,6 +271,17 @@ def generate_offline_intelligent_response(question: str, ctx: Dict[str, Any]) ->
             f"ocurrido en **{top1.get('place')}** ({top1.get('region', 'N/A')}) a una profundidad de **{top1.get('depth_km')} km** "
             f"({event_time_str}). Alerta de tsunami: **{tsunami_str}**."
         )
+
+    # 4.5. Búsqueda por país o región específica
+    for reg in ["indonesia", "alaska", "california", "nevada", "texas", "hawaii", "colombia", "chile", "mexico", "méxico", "japon", "japón", "peru", "perú"]:
+        if reg in q:
+            matches = [e for e in (recent_events + top_events) if reg in (e.get("place", "") or "").lower() or reg in (e.get("region", "") or "").lower()]
+            if matches:
+                m = matches[0]
+                t_str = m['event_time'].strftime('%Y-%m-%d %H:%M UTC') if m.get('event_time') else 'Reciente'
+                return f"En la región de **{reg.capitalize()}**, el sismo registrado en la capa Gold es de **M {m.get('magnitude')}** en *{m.get('place')}* (Profundidad: {m.get('depth_km')} km, Fecha: {t_str})."
+            else:
+                return f"No se registran eventos sísmicos recientes en la región de **{reg.capitalize()}** en la ventana de monitoreo actual de la capa Gold."
 
     # 5. Anomalías y Enjambres con ML
     if any(k in q for k in ["anomal", "enjambre", "alerta", "atipico", "atípico", "isolation"]):

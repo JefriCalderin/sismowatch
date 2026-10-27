@@ -54,8 +54,8 @@ function initAuth() {
   authSection.classList.remove("hidden");
   
   userBadge.innerHTML = `
-    <span class="font-semibold text-slate-800">${state.user.username}</span>
-    <span class="ml-2 px-2.5 py-0.5 text-xs rounded-full font-bold uppercase ${state.user.role === 'admin' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-700'}">
+    <span class="font-semibold text-slate-800 dark:text-slate-200">${state.user.username}</span>
+    <span class="ml-2 px-2.5 py-0.5 text-xs rounded-full font-bold uppercase ${state.user.role === 'admin' ? 'bg-indigo-100 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700'}">
       ${state.user.role}
     </span>
   `;
@@ -194,13 +194,13 @@ function updateLiveAlertsBanner(latestEvent) {
   const time = new Date(latestEvent.event_time).toLocaleTimeString();
 
   banner.innerHTML = `
-    <div class="flex items-center justify-between text-xs py-1.5 px-3 bg-indigo-50 border border-indigo-200 rounded-lg text-indigo-900 shadow-sm animate-pulse">
-      <div class="flex items-center gap-2">
-        <span class="px-2 py-0.5 rounded font-bold ${mag >= 5.0 ? 'bg-red-500 text-white' : 'bg-indigo-600 text-white'}">M ${mag}</span>
-        <span class="font-medium">${place}</span>
-        <span class="text-indigo-500">(${time})</span>
+    <div class="flex items-center justify-between text-xs py-2 px-3.5 bg-indigo-50/80 dark:bg-slate-900/90 border border-indigo-200/80 dark:border-slate-800 rounded-xl text-indigo-950 dark:text-slate-200 shadow-sm transition">
+      <div class="flex items-center gap-2.5">
+        <span class="px-2 py-0.5 rounded font-black text-xs ${mag >= 5.0 ? 'bg-red-500 text-white' : 'bg-indigo-600 text-white'}">M ${mag}</span>
+        <span class="font-medium text-slate-800 dark:text-slate-200">${place}</span>
+        <span class="text-indigo-600 dark:text-indigo-400 font-mono text-[11px]">(${time})</span>
       </div>
-      ${latestEvent.tsunami_alert ? '<span class="px-2 py-0.5 bg-red-600 text-white rounded font-bold text-[10px]">ALERTA TSUNAMI</span>' : ''}
+      ${latestEvent.tsunami_alert ? '<span class="px-2.5 py-0.5 bg-red-600 text-white rounded-full font-bold text-[10px] animate-pulse">ALERTA TSUNAMI</span>' : '<span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> En Vivo</span>'}
     </div>
   `;
 }
@@ -310,17 +310,29 @@ async function loadKPIs() {
   }
 }
 
+function applyMapTheme(isDark) {
+  if (!state.map) return;
+  if (state.tileLayer) {
+    state.map.removeLayer(state.tileLayer);
+  }
+  const tileUrl = isDark
+    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+    : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+  const attribution = isDark
+    ? '© CARTO © OpenStreetMap contributors | SismoWatch'
+    : '© OpenStreetMap contributors | SismoWatch';
+
+  state.tileLayer = L.tileLayer(tileUrl, { maxZoom: 18, attribution }).addTo(state.map);
+}
+
 function initMap() {
   if (state.map) return;
   const mapElement = document.getElementById("map");
   if (!mapElement) return;
 
-  // Centro global
+  const isDark = document.documentElement.classList.contains("dark");
   state.map = L.map("map").setView([20, 0], 2);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 18,
-    attribution: '© OpenStreetMap contributors | SismoWatch'
-  }).addTo(state.map);
+  applyMapTheme(isDark);
 }
 
 function renderMapMarkers(events) {
@@ -1066,13 +1078,13 @@ window.handleChatSubmit = async function(e) {
 function formatMarkdownToHtml(text) {
   if (!text) return "";
   let html = text
-    .replace(/^### (.*$)/gim, '<h4 class="font-bold text-indigo-950 mt-2 mb-1">$1</h4>')
-    .replace(/^## (.*$)/gim, '<h3 class="font-bold text-indigo-950 mt-3 mb-1 text-base">$1</h3>')
-    .replace(/^# (.*$)/gim, '<h2 class="font-extrabold text-indigo-950 mt-3 mb-2 text-lg">$1</h2>')
-    .replace(/\*\*(.*?)\*\*/gim, '<b>$1</b>')
-    .replace(/\*(.*?)\*/gim, '<i>$1</i>')
-    .replace(/`(.*?)`/gim, '<code class="px-1.5 py-0.5 bg-slate-100 text-indigo-700 rounded font-mono text-xs">$1</code>')
-    .replace(/^\- (.*$)/gim, '<li class="ml-4 list-disc">$1</li>')
+    .replace(/^### (.*$)/gim, '<h4 class="font-bold text-slate-900 dark:text-indigo-300 mt-2.5 mb-1 text-sm">$1</h4>')
+    .replace(/^## (.*$)/gim, '<h3 class="font-bold text-slate-900 dark:text-indigo-300 mt-3 mb-1 text-base">$1</h3>')
+    .replace(/^# (.*$)/gim, '<h2 class="font-extrabold text-slate-900 dark:text-indigo-200 mt-3 mb-2 text-lg">$1</h2>')
+    .replace(/\*\*(.*?)\*\*/gim, '<b class="font-bold text-slate-900 dark:text-white">$1</b>')
+    .replace(/\*(.*?)\*/gim, '<i class="italic text-slate-700 dark:text-slate-300">$1</i>')
+    .replace(/`(.*?)`/gim, '<code class="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-950 text-indigo-700 dark:text-indigo-300 border border-slate-200 dark:border-slate-800 rounded font-mono text-xs">$1</code>')
+    .replace(/^\- (.*$)/gim, '<li class="ml-4 list-disc text-slate-700 dark:text-slate-300">$1</li>')
     .replace(/\n\n/gim, '<br/><br/>')
     .replace(/\n/gim, '<br/>');
   return html;
@@ -1090,7 +1102,7 @@ function appendChatMessage(role, content, sources = []) {
       <div class="bg-indigo-600 text-white rounded-2xl rounded-tr-none p-4 max-w-xl text-sm leading-relaxed shadow-sm">
         <p>${content}</p>
       </div>
-      <div class="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-xs shrink-0">
+      <div class="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-xs shrink-0 border border-slate-700">
         ${state.user ? state.user.username.slice(0, 2).toUpperCase() : 'TU'}
       </div>
     `;
@@ -1100,16 +1112,16 @@ function appendChatMessage(role, content, sources = []) {
     let sourcesBadge = "";
     if (sources && sources.length > 0) {
       sourcesBadge = `
-        <div class="mt-3 pt-2 border-t border-slate-200/60 flex flex-wrap gap-1 items-center text-[11px] text-slate-500">
-          <span class="font-semibold text-slate-400">Fuentes Gold:</span>
-          ${sources.map(s => `<span class="px-1.5 py-0.5 bg-slate-200 text-slate-700 rounded font-mono text-[10px]">${s}</span>`).join(" ")}
+        <div class="mt-3 pt-2.5 border-t border-slate-200/60 dark:border-slate-800 flex flex-wrap gap-1.5 items-center text-[11px] text-slate-500 dark:text-slate-400">
+          <span class="font-semibold text-slate-400 dark:text-slate-500">Fuentes Gold:</span>
+          ${sources.map(s => `<span class="px-2 py-0.5 bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300/60 dark:border-slate-700 rounded-md font-mono text-[10px]">${s}</span>`).join(" ")}
         </div>
       `;
     }
 
     msgDiv.innerHTML = `
-      <div class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0">IA</div>
-      <div class="bg-slate-50 border border-slate-200 rounded-2xl rounded-tl-none p-4 max-w-2xl text-sm text-slate-800 leading-relaxed shadow-2xs">
+      <div class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">IA</div>
+      <div class="bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl rounded-tl-none p-4 max-w-2xl text-sm text-slate-800 dark:text-slate-200 leading-relaxed shadow-2xs">
         <div>${formatted}</div>
         ${sourcesBadge}
       </div>
@@ -1265,6 +1277,7 @@ function toggleDarkMode() {
   const isDark = document.documentElement.classList.toggle("dark");
   localStorage.setItem("sismowatch_theme", isDark ? "dark" : "light");
   updateThemeIcon(isDark);
+  applyMapTheme(isDark);
   showToast(`Modo ${isDark ? "Oscuro" : "Claro"} activado`, "info");
 }
 
