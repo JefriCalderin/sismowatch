@@ -151,4 +151,12 @@ def save_raw_to_bronze(data: Dict[str, Any], source_feed: str = "usgs_feed") -> 
     # Ejecuta inserción con credenciales de role_ingest
     count = execute_batch_upsert(upsert_query, records_to_upsert, role="ingest")
     logger.info(f"Capa Bronze actualizada con éxito: {count} registros upserted.")
+
+    # Sincronizar copia en MinIO Object Storage (bucket sismowatch-bronze)
+    try:
+        from airflow.include.storage_minio import upload_bronze_payload
+        upload_bronze_payload(data, tag=source_feed)
+    except Exception as minio_exc:
+        logger.warning(f"Fallo no bloqueante al subir a MinIO Bronze: {minio_exc}")
+
     return count

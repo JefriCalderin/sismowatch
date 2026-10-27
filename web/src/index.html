@@ -157,6 +157,53 @@
         <div id="map"></div>
       </div>
 
+      <!-- Tabla de Sismos de Hoy (Tiempo Real / Últimas 24 Horas) -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+        <div class="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="flex items-center gap-2.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="text-base font-bold text-slate-900">Actividad Sísmica de Hoy (Tiempo Real / Últimas 24 Horas)</h3>
+                <span id="badge-today-count" class="text-xs px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-bold border border-indigo-200">Cargando...</span>
+              </div>
+              <p class="text-xs text-slate-500 mt-0.5">Eventos registrados hoy en la Capa Gold (sincronización automática continua en vivo).</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] text-slate-400 hidden sm:inline">Refresco automático cada 30s</span>
+            <button type="button" onclick="loadTodayEvents()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition flex items-center gap-1 cursor-pointer">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              <span>Refrescar</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                <th class="py-3 px-4">ID Evento</th>
+                <th class="py-3 px-4">Magnitud</th>
+                <th class="py-3 px-4">Ubicación</th>
+                <th class="py-3 px-4">Región</th>
+                <th class="py-3 px-4">Profundidad</th>
+                <th class="py-3 px-4">Coordenadas</th>
+                <th class="py-3 px-4">Hora UTC</th>
+              </tr>
+            </thead>
+            <tbody id="today-events-table-body" class="divide-y divide-slate-100">
+              <!-- Cargado dinámicamente con sismos de hoy -->
+            </tbody>
+          </table>
+          <div id="today-events-empty" class="hidden text-center py-8 text-slate-500 text-sm">
+            <span class="text-xl block mb-1">✅</span>
+            <p class="font-bold text-slate-700">Sin eventos anómalos o de alta magnitud en las últimas horas</p>
+            <p class="text-xs text-slate-400">Todos los parámetros se mantienen estables en la capa Gold.</p>
+          </div>
+        </div>
+      </div>
+
       <!-- Gráficos Analíticos -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Serie Temporal -->
@@ -186,7 +233,18 @@
         </div>
       </div>
 
-      <!-- Filtros y Tabla Paginada de Eventos -->
+      <!-- SEPARADOR VISUAL: HISTORIAL Y DÍAS ANTERIORES -->
+      <div class="pt-6 pb-2 border-t-2 border-dashed border-slate-300">
+        <div class="flex items-center gap-2.5">
+          <span class="p-2 bg-indigo-50 text-indigo-700 rounded-xl text-lg font-bold border border-indigo-100">📅</span>
+          <div>
+            <h2 class="text-lg font-black text-slate-900">Historial y Consultas de Días Anteriores</h2>
+            <p class="text-xs text-slate-500">Consulta retrospectiva seleccionando un día específico, rango personalizado, mes, año o los últimos N días sin alterar el monitoreo de hoy.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filtros y Tabla Paginada de Eventos Históricos -->
       <!-- Seguimiento e Historial de Eventos Sísmicos (USGS Oficial & Capa Gold) -->
       <div class="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
         <div class="p-5 border-b border-slate-100 space-y-4">
@@ -194,9 +252,9 @@
             <div>
               <div class="flex items-center gap-2">
                 <span class="p-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-sm">🌐</span>
-                <h3 class="text-base font-bold text-slate-900">Seguimiento e Historial de Eventos Sísmicos</h3>
+                <h3 class="text-base font-bold text-slate-900">Filtros de Búsqueda Histórica</h3>
               </div>
-              <p class="text-xs text-slate-500 mt-0.5">Consultas manuales dinámicas a la API oficial del USGS (<code class="text-[11px] bg-slate-100 px-1 py-0.5 rounded text-indigo-600 font-mono">fdsnws/event/1/query</code>) y Catálogo Gold.</p>
+              <p class="text-xs text-slate-500 mt-0.5">Consultas manuales dinámicas a la API oficial del USGS (<code class="text-[11px] bg-slate-100 px-1 py-0.5 rounded text-indigo-600 font-mono">fdsnws/event/1/query</code>) o al Catálogo Gold.</p>
             </div>
             
             <!-- Selector de Modo de Consulta -->

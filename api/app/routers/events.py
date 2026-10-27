@@ -245,6 +245,41 @@ async def query_usgs_historical(
         "map_markers": map_markers
     }
 
+@router.get("/events/today")
+def get_today_events(
+    limit: int = Query(50, ge=1, le=100, description="Límite de eventos recientes de hoy"),
+    current_user: dict = Depends(require_role(["viewer", "admin"]))
+):
+    """
+    Retorna los eventos sísmicos registrados el día de hoy (UTC / últimas 24 horas)
+    directamente desde la capa Gold para el monitoreo en tiempo real.
+    """
+    query = """
+        SELECT
+            id, magnitude, place, region, event_time, updated_time,
+            longitude, latitude, depth_km, tsunami_alert, significance,
+            magnitude_category, depth_category, is_anomaly, anomaly_score,
+            anomaly_reason, url
+        FROM gold.fact_earthquakes
+        WHERE event_time >= CURRENT_DATE
+           OR event_time >= (NOW() - INTERVAL '24 hours')
+        ORDER BY event_time DESC
+        LIMIT %s;
+    """
+    rows = query_db(query, (limit,))
+    count_row = query_db_one("""
+        SELECT COUNT(*) as total 
+        FROM gold.fact_earthquakes 
+        WHERE event_time >= CURRENT_DATE 
+           OR event_time >= (NOW() - INTERVAL '24 hours');
+    """)
+    total = int(count_row.get("total", len(rows)))
+    return {
+        "source": "gold.fact_earthquakes (Tiempo Real / Hoy)",
+        "total": total,
+        "events": rows
+    }
+
 @router.get("/events", response_model=PaginatedEventsResponse)
 def get_events(
     page: int = Query(1, ge=1, description="Número de página"),

@@ -170,6 +170,8 @@ function initSSE() {
       }
       if (data.events && data.events.length > 0) {
         updateLiveAlertsBanner(data.events[0]);
+        loadTodayEvents();
+        loadKPIs();
       }
     } catch (e) {
       console.error("Error parseando SSE:", e);
@@ -207,13 +209,89 @@ function updateLiveAlertsBanner(latestEvent) {
 // 3. Vistas y Componentes del Dashboard
 // ------------------------------------------------------------------------------
 async function initDashboard() {
+  initMap();
   await Promise.all([
     loadKPIs(),
+    loadTodayEvents(),
     loadCharts(),
     loadEventsTable()
   ]);
-  initMap();
+
+  // Refresco automático de eventos de hoy cada 30 segundos
+  if (!state.todayRefreshInterval) {
+    state.todayRefreshInterval = setInterval(() => {
+      loadTodayEvents();
+      loadKPIs();
+    }, 30000);
+  }
 }
+
+async function loadTodayEvents() {
+  const tbody = document.getElementById("today-events-table-body");
+  const emptyState = document.getElementById("today-events-empty");
+  const badgeCount = document.getElementById("badge-today-count");
+  if (!tbody) return;
+
+  try {
+    const res = await fetchAuth(`${API_BASE}/api/events/today?limit=50`);
+    if (!res.ok) throw new Error("Error obteniendo eventos de hoy");
+    const data = await res.json();
+    const events = data.events || [];
+
+    if (badgeCount) {
+      badgeCount.textContent = `${events.length} sismos registrados hoy`;
+    }
+
+    if (events.length === 0) {
+      tbody.innerHTML = "";
+      if (emptyState) emptyState.classList.remove("hidden");
+      return;
+    }
+
+    if (emptyState) emptyState.classList.add("hidden");
+
+    tbody.innerHTML = events.map(ev => {
+      const magVal = parseFloat(ev.magnitude) || 0.0;
+      let magBadgeClass = "bg-emerald-100 text-emerald-800";
+      if (magVal >= 7.0) magBadgeClass = "bg-red-600 text-white font-bold";
+      else if (magVal >= 5.5) magBadgeClass = "bg-orange-100 text-orange-800 font-bold";
+      else if (magVal >= 4.0) magBadgeClass = "bg-amber-100 text-amber-800";
+      else if (magVal >= 3.0) magBadgeClass = "bg-blue-100 text-blue-800";
+
+      const coordsStr = (ev.latitude != null && ev.longitude != null) 
+        ? `${ev.latitude}, ${ev.longitude}` 
+        : 'N/A';
+      const eventTimeStr = ev.event_time ? new Date(ev.event_time).toUTCString().slice(17, 25) + ' UTC' : 'N/A';
+
+      return `
+        <tr class="hover:bg-slate-50 transition border-b border-slate-100 text-xs">
+          <td class="py-3 px-4 font-mono font-bold text-indigo-700">
+            ${ev.url ? `<a href="${ev.url}" target="_blank" class="hover:underline flex items-center gap-1">${ev.id} <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg></a>` : ev.id}
+          </td>
+          <td class="py-3 px-4">
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold ${magBadgeClass}">M ${magVal.toFixed(1)}</span>
+          </td>
+          <td class="py-3 px-4 font-medium text-slate-800">
+            ${ev.place}
+            ${ev.is_anomaly ? `<span class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">⚠️ Anomalía</span>` : ''}
+            ${ev.tsunami_alert ? `<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800">🌊 Tsunami</span>` : ''}
+          </td>
+          <td class="py-3 px-4 text-slate-600">${ev.region || 'Global'}</td>
+          <td class="py-3 px-4 text-slate-600 font-semibold">${ev.depth_km} km</td>
+          <td class="py-3 px-4 font-mono text-[11px] text-slate-500">${coordsStr}</td>
+          <td class="py-3 px-4 text-slate-500 text-[11px] whitespace-nowrap font-medium">${eventTimeStr}</td>
+        </tr>
+      `;
+    }).join("");
+
+    // Renderizar los sismos de hoy en el mapa en vivo inicialmente
+    renderMapMarkers(events);
+
+  } catch (err) {
+    console.error("Error cargando eventos de hoy:", err);
+  }
+}
+window.loadTodayEvents = loadTodayEvents;
 
 async function loadKPIs() {
   try {

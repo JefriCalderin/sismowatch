@@ -224,7 +224,9 @@ services:
       MINIO_SECURE: "false"
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      AI_MODEL_NAME: ${AI_MODEL_NAME:-gemini-1.5-flash}
+      AI_MODEL_NAME: ${AI_MODEL_NAME:-gemini-3.8-flash}
+    volumes:
+      - ./api/app:/app/api/app
     ports:
       - "8000:8000"
     healthcheck:
@@ -247,6 +249,8 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    volumes:
+      - ./web/src:/usr/share/nginx/html
     ports:
       - "3000:3000"
     networks:

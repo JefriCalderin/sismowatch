@@ -236,3 +236,27 @@ def test_usgs_historical_query_invalid_search_type():
 
     res = client.get("/api/events/usgs-query?search_type=invalid_type", headers=headers)
     assert res.status_code == 400
+
+def test_get_today_events_endpoint(monkeypatch):
+    """Verifica que el endpoint /api/events/today retorne los eventos de hoy."""
+    login_res = client.post("/auth/login", json={
+        "username": api_settings.VIEWER_USERNAME,
+        "password": api_settings.VIEWER_PASSWORD
+    })
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    sample_today_events = [
+        {"id": "today1", "magnitude": 2.1, "place": "Southern California", "region": "CA", "event_time": "2026-10-27T12:00:00Z", "updated_time": "2026-10-27T12:05:00Z", "longitude": -118.2, "latitude": 34.0, "depth_km": 10.0, "tsunami_alert": False, "significance": 20, "magnitude_category": "Micro", "depth_category": "Superficial", "is_anomaly": False, "anomaly_score": 0.0, "anomaly_reason": "", "url": ""}
+    ]
+
+    monkeypatch.setattr("api.app.routers.events.query_db", lambda q, p=None: sample_today_events)
+    monkeypatch.setattr("api.app.routers.events.query_db_one", lambda q, p=None: {"total": 1})
+
+    res = client.get("/api/events/today", headers=headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 1
+    assert data["events"][0]["id"] == "today1"
+    assert data["events"][0]["magnitude"] == 2.1
+

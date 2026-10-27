@@ -173,6 +173,22 @@ def process_bronze_to_silver() -> int:
 
     count = execute_batch_upsert(upsert_query, records, role="transform")
     logger.info(f"Capa Silver actualizada exitosamente: {count} registros procesados.")
+
+    # Sincronización en MinIO Object Storage (bucket sismowatch-silver)
+    try:
+        from airflow.include.storage_minio import upload_silver_dataset
+        # Convertir fechas a strings para serialización JSON
+        silver_records = []
+        for _, row in df.iterrows():
+            item = row.to_dict()
+            for k, v in item.items():
+                if hasattr(v, "isoformat"):
+                    item[k] = v.isoformat()
+            silver_records.append(item)
+        upload_silver_dataset(silver_records)
+    except Exception as minio_exc:
+        logger.warning(f"Fallo no bloqueante sincronizando MinIO Silver: {minio_exc}")
+
     return count
 
 def process_silver_to_gold(pipeline_run_id: str = "manual_run") -> int:
@@ -272,6 +288,20 @@ def process_silver_to_gold(pipeline_run_id: str = "manual_run") -> int:
 
     # 4. Actualizar Métricas Agregadas en gold.daily_metrics
     _refresh_daily_metrics()
+
+    # Sincronización en MinIO Object Storage (bucket sismowatch-gold)
+    try:
+        from airflow.include.storage_minio import upload_gold_dataset
+        gold_records = []
+        for _, row in enriched_df.iterrows():
+            item = row.to_dict()
+            for k, v in item.items():
+                if hasattr(v, "isoformat"):
+                    item[k] = v.isoformat()
+            gold_records.append(item)
+        upload_gold_dataset(gold_records)
+    except Exception as minio_exc:
+        logger.warning(f"Fallo no bloqueante sincronizando MinIO Gold: {minio_exc}")
 
     logger.info(f"Capa Gold publicada exitosamente: {gold_count} registros curados.")
     return gold_count
