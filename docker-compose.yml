@@ -1,0 +1,276 @@
+services:
+  # ==============================================================================
+  # 1. Base de Datos PostgreSQL (Schemas Bronze, Silver, Gold y Roles)
+  # ==============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: sismowatch-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sismowatch}
+      POSTGRES_USER: ${POSTGRES_USER:-sismo_root}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-SismoSecureRoot2026!}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sismo_root -d sismowatch"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - sismowatch-net
+
+  # ==============================================================================
+  # 2. Apache Airflow - Inicializador de Base de Datos y Creación de Admin
+  # ==============================================================================
+  airflow-init:
+    build:
+      context: .
+      dockerfile: airflow/Dockerfile
+    container_name: sismowatch-airflow-init
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-sismo_root}:${POSTGRES_PASSWORD:-SismoSecureRoot2026!}@postgres:5432/${POSTGRES_DB:-sismowatch}
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY:--UfwDfzlSvxnPPjEkIzt-GzuRh6pdeEstE1Gb-WfH68=}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USER:-admin}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:-SismoAdmin2026!}
+      _AIRFLOW_WWW_USER_ROLE: Admin
+      _AIRFLOW_WWW_USER_EMAIL: ${AIRFLOW_ADMIN_EMAIL:-admin@sismowatch.internal}
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate &&
+        airflow users create \
+          --username ${AIRFLOW_ADMIN_USER:-admin} \
+          --firstname Sismo \
+          --lastname Admin \
+          --role Admin \
+          --email ${AIRFLOW_ADMIN_EMAIL:-admin@sismowatch.internal} \
+          --password ${AIRFLOW_ADMIN_PASSWORD:-SismoAdmin2026!} || true
+    networks:
+      - sismowatch-net
+
+  # ==============================================================================
+  # 3. Apache Airflow - Webserver (Puerto 8080)
+  # ==============================================================================
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: airflow/Dockerfile
+    container_name: sismowatch-airflow-webserver
+    restart: always
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-sismo_root}:${POSTGRES_PASSWORD:-SismoSecureRoot2026!}@postgres:5432/${POSTGRES_DB:-sismowatch}
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY:--UfwDfzlSvxnPPjEkIzt-GzuRh6pdeEstE1Gb-WfH68=}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "false"
+      AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-sismowatch}
+      DB_INGEST_USER: ${DB_INGEST_USER:-role_ingest}
+      DB_INGEST_PASSWORD: ${DB_INGEST_PASSWORD:-IngestSecret2026!}
+      DB_TRANSFORM_USER: ${DB_TRANSFORM_USER:-role_transform}
+      DB_TRANSFORM_PASSWORD: ${DB_TRANSFORM_PASSWORD:-TransformSecret2026!}
+      DB_READ_USER: ${DB_READ_USER:-platform_user}
+      DB_READ_PASSWORD: ${DB_READ_PASSWORD:-PlatformRead2026!}
+      USGS_FEED_URL: ${USGS_FEED_URL:-https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson}
+      USGS_QUERY_URL: ${USGS_QUERY_URL:-https://earthquake.usgs.gov/fdsnws/event/1/query}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      AI_MODEL_NAME: ${AI_MODEL_NAME:-gemini-1.5-flash}
+      SPARK_MASTER_URL: spark://spark-master:7077
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/include:/opt/airflow/include
+      - ./airflow/logs:/opt/airflow/logs
+    command: webserver
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    networks:
+      - sismowatch-net
+
+  # ==============================================================================
+  # 4. Apache Airflow - Scheduler
+  # ==============================================================================
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: airflow/Dockerfile
+    container_name: sismowatch-airflow-scheduler
+    restart: always
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-sismo_root}:${POSTGRES_PASSWORD:-SismoSecureRoot2026!}@postgres:5432/${POSTGRES_DB:-sismowatch}
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY:--UfwDfzlSvxnPPjEkIzt-GzuRh6pdeEstE1Gb-WfH68=}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-sismowatch}
+      DB_INGEST_USER: ${DB_INGEST_USER:-role_ingest}
+      DB_INGEST_PASSWORD: ${DB_INGEST_PASSWORD:-IngestSecret2026!}
+      DB_TRANSFORM_USER: ${DB_TRANSFORM_USER:-role_transform}
+      DB_TRANSFORM_PASSWORD: ${DB_TRANSFORM_PASSWORD:-TransformSecret2026!}
+      DB_READ_USER: ${DB_READ_USER:-platform_user}
+      DB_READ_PASSWORD: ${DB_READ_PASSWORD:-PlatformRead2026!}
+      USGS_FEED_URL: ${USGS_FEED_URL:-https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson}
+      USGS_QUERY_URL: ${USGS_QUERY_URL:-https://earthquake.usgs.gov/fdsnws/event/1/query}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      AI_MODEL_NAME: ${AI_MODEL_NAME:-gemini-1.5-flash}
+      SPARK_MASTER_URL: spark://spark-master:7077
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/include:/opt/airflow/include
+      - ./airflow/logs:/opt/airflow/logs
+    command: scheduler
+    networks:
+      - sismowatch-net
+
+  # ==============================================================================
+  # 5. Apache Spark - Master (Puerto 7077 y Web UI 8081)
+  # ==============================================================================
+  spark-master:
+    image: bitnami/spark:3.5.0
+    container_name: sismowatch-spark-master
+    restart: always
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    ports:
+      - "7077:7077"
+      - "8081:8080"
+    volumes:
+      - ./spark/jobs:/opt/bitnami/spark/jobs
+    networks:
+      - sismowatch-net
+
+  # ==============================================================================
+  # 6. Apache Spark - Worker
+  # ==============================================================================
+  spark-worker:
+    image: bitnami/spark:3.5.0
+    container_name: sismowatch-spark-worker
+    restart: always
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=1G
+      - SPARK_WORKER_CORES=2
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    volumes:
+      - ./spark/jobs:/opt/bitnami/spark/jobs
+    networks:
+      - sismowatch-net
+
+  # ==============================================================================
+  # 7. Backend API FastAPI (Puerto 8000)
+  # ==============================================================================
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    container_name: sismowatch-api
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-sismowatch}
+      DB_READ_USER: ${DB_READ_USER:-platform_user}
+      DB_READ_PASSWORD: ${DB_READ_PASSWORD:-PlatformRead2026!}
+      JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_key_sismowatch_2026_xYz987!Secured}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: 120
+      APP_ADMIN_USERNAME: ${APP_ADMIN_USERNAME:-admin}
+      APP_ADMIN_PASSWORD: ${APP_ADMIN_PASSWORD:-AdminSismo2026!}
+      APP_VIEWER_USERNAME: ${APP_VIEWER_USERNAME:-viewer}
+      APP_VIEWER_PASSWORD: ${APP_VIEWER_PASSWORD:-ViewerSismo2026!}
+      CORS_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000"
+      AIRFLOW_API_URL: "http://airflow-webserver:8080/api/v1"
+      AIRFLOW_ADMIN_USER: ${AIRFLOW_ADMIN_USER:-admin}
+      AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:-SismoAdmin2026!}
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sismowatch-net
+
+  # ==============================================================================
+  # 8. Web Frontend Nginx (Puerto 3000)
+  # ==============================================================================
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    container_name: sismowatch-web
+    restart: always
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    networks:
+      - sismowatch-net
+
+  # ==============================================================================
+  # 9. OpenMetadata & Governance Synchronizer
+  # ==============================================================================
+  openmetadata-sync:
+    image: python:3.11-slim
+    container_name: sismowatch-openmetadata-sync
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./openmetadata:/openmetadata
+    command: ["python", "/openmetadata/register_metadata.py"]
+    networks:
+      - sismowatch-net
+
+networks:
+  sismowatch-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
