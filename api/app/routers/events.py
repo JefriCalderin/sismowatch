@@ -164,16 +164,16 @@ async def query_usgs_historical(
         # Fallback resiliente: consultar catálogo Gold local
         source_label = "Catálogo Histórico Gold (Respaldo Local por Indisponibilidad de Red USGS)"
         db_sql = """
-            SELECT id, magnitude, place, region, event_time, updated_at,
+            SELECT id, magnitude, place, region, event_time, updated_time,
                    longitude, latitude, depth_km, tsunami_alert, significance,
                    magnitude_category, depth_category, is_anomaly, anomaly_score,
                    anomaly_reason, url
             FROM gold.fact_earthquakes
-            WHERE event_time >= :st AND event_time <= :et AND magnitude >= :mm
+            WHERE event_time >= %s AND event_time <= %s AND magnitude >= %s
             ORDER BY event_time DESC
             LIMIT 5000;
         """
-        db_rows = query_db(db_sql, {"st": starttime, "et": endtime, "mm": min_magnitude}) or []
+        db_rows = query_db(db_sql, (starttime, endtime, min_magnitude)) or []
 
         if db_rows:
             for r in db_rows:

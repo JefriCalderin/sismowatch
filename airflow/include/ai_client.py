@@ -31,8 +31,20 @@ def get_calculated_metrics(target_date: Optional[date] = None) -> Dict[str, Any]
     """
     Calcula mediante SQL en la capa Gold las cifras exactas y verificadas para el reporte.
     Garantiza que la verdad matemática provenga de la base de datos, no del LLM.
+    Si no se especifica una fecha, selecciona automáticamente la fecha más reciente con datos activos.
     """
-    ref_date = target_date or (datetime.now(timezone.utc) - timedelta(days=1)).date()
+    if target_date is not None:
+        ref_date = target_date
+    else:
+        latest_row = execute_query(
+            "SELECT event_date FROM gold.fact_earthquakes GROUP BY event_date HAVING COUNT(*) > 0 ORDER BY event_date DESC LIMIT 1;",
+            role="transform",
+            fetch=True
+        )
+        if latest_row and latest_row[0].get("event_date"):
+            ref_date = latest_row[0]["event_date"]
+        else:
+            ref_date = datetime.now(timezone.utc).date()
     
     # Consulta de métricas del día en gold.fact_earthquakes
     query = """
@@ -186,7 +198,7 @@ def generate_daily_ai_report(target_date: Optional[date] = None) -> Dict[str, An
     )
 
     start_time = time.time()
-    model_name = settings.AI_MODEL_NAME
+    model_name = settings.AI_MODEL_NAME or "gemini-3.5-flash-lite"
     tokens_prompt = len(rendered_prompt.split()) * 2 # Estimación de tokens
     tokens_completion = 0
     generation_status = "SUCCESS"

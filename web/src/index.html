@@ -67,8 +67,7 @@
       <button id="nav-btn-dashboard" onclick="switchTab('dashboard')" class="px-3 py-2 text-sm font-bold text-indigo-600 border-b-2 border-indigo-600">
         Dashboard Principal
       </button>
-      <button id="nav-btn-chat" onclick="switchTab('chat')" class="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 flex items-center gap-1.5">
-        <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+      <button id="nav-btn-chat" onclick="switchTab('chat')" class="px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
         Chat con IA (Gold)
       </button>
       <button id="nav-btn-reports" onclick="switchTab('reports')" class="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900">
@@ -460,7 +459,9 @@
       <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div class="flex items-center gap-2">
-            <span class="p-2 bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 rounded-lg border border-indigo-200 dark:border-indigo-800/60 flex items-center justify-center"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></span>
+            <span class="p-2.5 bg-indigo-50 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-400 rounded-xl border border-indigo-100 dark:border-indigo-800/60 flex items-center justify-center shrink-0">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            </span>
             <div>
               <h2 class="text-xl font-bold text-slate-900">Asistente Inteligente SismoWatch</h2>
               <p class="text-xs text-slate-500">Consulta datos analíticos, magnitudes, anomalías y recomendaciones en lenguaje natural conectada a la Capa Gold.</p>

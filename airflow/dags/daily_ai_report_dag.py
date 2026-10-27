@@ -25,8 +25,23 @@ default_args = {
 
 def ai_report_callable(**kwargs):
     """Ejecuta la generación del reporte diario con IA y validaciones numéricas."""
-    execution_date = kwargs.get("execution_date")
-    target_date = (execution_date - timedelta(days=1)).date() if execution_date else None
+    dag_run = kwargs.get("dag_run")
+    conf = dag_run.conf if dag_run else {}
+    target_date_str = conf.get("target_date") if conf else None
+
+    if target_date_str:
+        try:
+            target_date = datetime.strptime(target_date_str, "%Y-%m-%d").date()
+        except Exception:
+            target_date = None
+    elif conf.get("force_regenerate"):
+        # Forzar sobre la fecha más reciente con datos activos
+        target_date = None
+    else:
+        # En ejecución programada regular a las 00:05 UTC, evaluar día anterior si hay fecha
+        execution_date = kwargs.get("execution_date")
+        target_date = (execution_date - timedelta(days=1)).date() if execution_date else None
+
     report = generate_daily_ai_report(target_date=target_date)
     logger.info(f"Reporte IA generado satisfactoriamente: {report.get('title')}")
     return report

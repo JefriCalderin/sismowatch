@@ -268,6 +268,35 @@ def generate_offline_intelligent_response(question: str, ctx: Dict[str, Any]) ->
             f"con una magnitud máxima de **{max_active:.1f}** y un promedio de **{avg_active:.2f}**."
         )
 
+    # 2.5. Búsqueda por país o región específica (Prioridad sobre búsqueda global para evitar respuestas genéricas)
+    for reg in ["indonesia", "alaska", "california", "nevada", "texas", "hawaii", "colombia", "chile", "mexico", "méxico", "japon", "japón", "peru", "perú", "fiji", "puerto rico"]:
+        if reg in q:
+            reg_clean = "mexico" if reg in ["mexico", "méxico"] else ("japon" if reg in ["japon", "japón"] else ("peru" if reg in ["peru", "perú"] else reg))
+            try:
+                matches = query_db("""
+                    SELECT id, magnitude, place, region, event_time, depth_km, tsunami_alert, magnitude_category
+                    FROM gold.fact_earthquakes
+                    WHERE LOWER(place) LIKE %s OR LOWER(region) LIKE %s
+                    ORDER BY event_time DESC
+                    LIMIT 5;
+                """, (f"%{reg_clean}%", f"%{reg_clean}%")) or []
+            except Exception:
+                matches = [e for e in (recent_events + top_events) if reg_clean in (e.get("place", "") or "").lower() or reg_clean in (e.get("region", "") or "").lower()]
+
+            if matches:
+                m = matches[0]
+                t_str = m['event_time'].strftime('%Y-%m-%d %H:%M UTC') if m.get('event_time') else 'Reciente'
+                mag_val = round(float(m.get("magnitude") or 0.0), 2)
+                depth_val = round(float(m.get("depth_km") or 0.0), 1)
+                tsunami_str = "Sí" if m.get('tsunami_alert') else "No"
+                return (
+                    f"El sismo más reciente registrado en la región de **{reg.capitalize()}** es de **M {mag_val:.2f}**, "
+                    f"ocurrido en **{m.get('place')}** a una profundidad de **{depth_val:.1f} km** el **{t_str}**. "
+                    f"Alerta de tsunami: **{tsunami_str}**."
+                )
+            else:
+                return f"No se registran eventos sísmicos recientes en la región de **{reg.capitalize()}** en la ventana de monitoreo actual de la capa Gold."
+
     # 3. Alertas de tsunami puntuales (Sin emojis)
     if any(k in q for k in ["tsunami", "alerta marina", "maremoto"]):
         active_tsunami = tsunami_today if events_today > 0 else tsunami_24h
@@ -275,16 +304,18 @@ def generate_offline_intelligent_response(question: str, ctx: Dict[str, Any]) ->
             return f"**Atención:** Se registran **{active_tsunami} alerta(s) de tsunami** asociadas a eventos recientes en la capa Gold."
         return "Actualmente **no hay alertas de tsunami activas** en los registros de la capa Gold."
 
-    # 3.5. Último sismo registrado / Más reciente / Últimos minutos
+    # 3.5. Último sismo registrado / Más reciente / Últimos minutos (Global)
     if any(k in q for k in ["ultimo sismo", "último sismo", "mas reciente", "más reciente", "ultimo temblor", "último temblor", "ultimo evento", "último evento", "ultimos minutos", "últimos minutos", "ultimos 5 minutos", "últimos 5 minutos", "hace poco", "recien", "recién"]):
         if not recent_events:
             return "Actualmente no hay registros de sismos recientes en la capa Gold."
         latest = recent_events[0]
         event_time_str = latest['event_time'].strftime('%Y-%m-%d %H:%M:%S UTC') if latest.get('event_time') else 'Hora no disponible'
         tsunami_str = "Sí" if latest.get('tsunami_alert') else "No"
+        mag_val = round(float(latest.get('magnitude') or 0.0), 2)
+        depth_val = round(float(latest.get('depth_km') or 0.0), 1)
         return (
-            f"El sismo más reciente registrado en la capa Gold es de **M {latest.get('magnitude')}**, "
-            f"ocurrido en **{latest.get('place')}** ({latest.get('region', 'N/A')}) a una profundidad de **{latest.get('depth_km')} km** "
+            f"El sismo más reciente registrado en la capa Gold es de **M {mag_val:.2f}**, "
+            f"ocurrido en **{latest.get('place')}** ({latest.get('region', 'N/A')}) a una profundidad de **{depth_val:.1f} km** "
             f"el **{event_time_str}**. Alerta de tsunami: **{tsunami_str}**."
         )
 
@@ -295,22 +326,13 @@ def generate_offline_intelligent_response(question: str, ctx: Dict[str, Any]) ->
         top1 = top_events[0]
         event_time_str = top1['event_time'].strftime('%Y-%m-%d %H:%M:%S UTC') if top1.get('event_time') else 'N/A'
         tsunami_str = "Sí" if top1.get('tsunami_alert') else "No"
+        mag_val = round(float(top1.get('magnitude') or 0.0), 2)
+        depth_val = round(float(top1.get('depth_km') or 0.0), 1)
         return (
-            f"El sismo de mayor magnitud registrado es de **M {top1.get('magnitude')}** ({top1.get('magnitude_category', 'N/A')}), "
-            f"ocurrido en **{top1.get('place')}** ({top1.get('region', 'N/A')}) a una profundidad de **{top1.get('depth_km')} km** "
+            f"El sismo de mayor magnitud registrado es de **M {mag_val:.2f}** ({top1.get('magnitude_category', 'N/A')}), "
+            f"ocurrido en **{top1.get('place')}** ({top1.get('region', 'N/A')}) a una profundidad de **{depth_val:.1f} km** "
             f"({event_time_str}). Alerta de tsunami: **{tsunami_str}**."
         )
-
-    # 4.5. Búsqueda por país o región específica
-    for reg in ["indonesia", "alaska", "california", "nevada", "texas", "hawaii", "colombia", "chile", "mexico", "méxico", "japon", "japón", "peru", "perú"]:
-        if reg in q:
-            matches = [e for e in (recent_events + top_events) if reg in (e.get("place", "") or "").lower() or reg in (e.get("region", "") or "").lower()]
-            if matches:
-                m = matches[0]
-                t_str = m['event_time'].strftime('%Y-%m-%d %H:%M UTC') if m.get('event_time') else 'Reciente'
-                return f"En la región de **{reg.capitalize()}**, el sismo registrado en la capa Gold es de **M {m.get('magnitude')}** en *{m.get('place')}* (Profundidad: {m.get('depth_km')} km, Fecha: {t_str})."
-            else:
-                return f"No se registran eventos sísmicos recientes en la región de **{reg.capitalize()}** en la ventana de monitoreo actual de la capa Gold."
 
     # 5. Anomalías y Enjambres con ML (Sin emojis)
     if any(k in q for k in ["anomal", "enjambre", "alerta", "atipico", "atípico", "isolation"]):
@@ -372,14 +394,7 @@ def query_llm_with_context(question: str, history: List[ChatMessage], ctx: Dict[
         import google.generativeai as genai
         genai.configure(api_key=api_key)
 
-        raw_model = api_settings.AI_MODEL_NAME or "gemini-2.0-flash-lite"
-        # Mapeo flexible de modelos optimizados lite
-        if "lite" in raw_model.lower():
-            model_name = "gemini-2.0-flash-lite"
-        elif "flash" in raw_model.lower():
-            model_name = "gemini-1.5-flash"
-        else:
-            model_name = raw_model
+        model_name = api_settings.AI_MODEL_NAME or "gemini-3.5-flash-lite"
 
         if not model_name.startswith("models/"):
             model_name = f"models/{model_name}"

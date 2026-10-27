@@ -639,14 +639,37 @@ async function loadEventsTable() {
         periodBadge.textContent = `Período: ${data.period.starttime.replace('T', ' ')} a ${data.period.endtime.replace('T', ' ')} UTC`;
       }
     } else {
-      // Modo Capa Gold local
+      // Modo Capa Gold local - calcular rango de fechas correspondiente al tipo de consulta
+      let calcStartDate = "";
+      let calcEndDate = "";
+      const now = new Date();
+      if (searchType === "last_n_days") {
+        const d = new Date(now.getTime() - lastDays * 24 * 60 * 60 * 1000);
+        calcStartDate = d.toISOString().split("T")[0];
+        calcEndDate = now.toISOString().split("T")[0];
+      } else if (searchType === "specific_day") {
+        calcStartDate = targetDate;
+        calcEndDate = targetDate;
+      } else if (searchType === "custom_range") {
+        calcStartDate = startDate;
+        calcEndDate = endDate;
+      } else if (searchType === "full_month") {
+        const mStr = String(month).padStart(2, '0');
+        const lastDay = new Date(monthYear, month, 0).getDate();
+        calcStartDate = `${monthYear}-${mStr}-01`;
+        calcEndDate = `${monthYear}-${mStr}-${lastDay}`;
+      } else if (searchType === "full_year") {
+        calcStartDate = `${fullYear}-01-01`;
+        calcEndDate = `${fullYear}-12-31`;
+      }
+
       const qParams = new URLSearchParams({
         page: state.filters.page,
         page_size: state.filters.pageSize,
         min_magnitude: minMag
       });
-      if (startDate) qParams.append("start_date", startDate);
-      if (endDate) qParams.append("end_date", endDate);
+      if (calcStartDate) qParams.append("start_date", calcStartDate);
+      if (calcEndDate) qParams.append("end_date", calcEndDate);
 
       url = `${API_BASE}/api/events?${qParams.toString()}`;
       const res = await fetchAuth(url);
@@ -654,7 +677,9 @@ async function loadEventsTable() {
       data = await res.json();
 
       if (countBadge) countBadge.textContent = `${data.total} sismos en Catálogo Gold (M ≥ ${minMag})`;
-      if (periodBadge) periodBadge.textContent = `Almacenados en PostgreSQL Gold`;
+      if (periodBadge) {
+        periodBadge.textContent = calcStartDate ? `Período Gold: ${calcStartDate} al ${calcEndDate}` : `Almacenados en PostgreSQL Gold`;
+      }
     }
 
     if (loadingState) loadingState.classList.add("hidden");
@@ -936,10 +961,10 @@ function switchTab(tabId) {
     if (section && btn) {
       if (tab === tabId) {
         section.classList.remove("hidden");
-        btn.className = "px-3 py-2 text-sm font-bold text-indigo-600 border-b-2 border-indigo-600";
+        btn.className = "px-3 py-2 text-sm font-bold text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400";
       } else {
         section.classList.add("hidden");
-        btn.className = "px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900";
+        btn.className = "px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white";
       }
     }
   });
